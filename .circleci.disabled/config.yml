@@ -1,0 +1,50 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: google/cloud-sdk
+    steps: 
+      - run: 
+          name: authenticate with gcloud
+          command: |
+            echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
+            gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
+      - checkout             
+      - setup_remote_docker
+      - run: |
+          gcloud auth configure-docker --quiet
+          SHORT_HASH=$(echo $CIRCLE_SHA1 | cut -c -7)      
+          docker build -t eu.gcr.io/ingress-demo-267001/site1:${SHORT_HASH} .
+          docker push eu.gcr.io/ingress-demo-267001/site1:${SHORT_HASH}
+  deploy:
+    docker:
+      - image: google/cloud-sdk  
+    steps: 
+      - run: 
+          name: authenticate with gcloud
+          command: |
+            echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
+            gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
+            gcloud container clusters get-credentials standard-cluster-1 --zone us-central1-a --project ingress-demo-267001
+      - checkout             
+      - run: |
+          SHORT_HASH=$(echo $CIRCLE_SHA1 | cut -c -7)      
+          echo $SHORT_HASH
+          sed  s/SHORT_HASH/$SHORT_HASH/ deployment.yaml.template > deployment.yaml
+          kubectl create  configmap configmap-site1-conf --from-file=site1.conf
+          kubectl apply -f deployment.yaml 
+
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs: 
+      - build:
+          filters:
+            branches: 
+              only: master
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches: 
+              only: master

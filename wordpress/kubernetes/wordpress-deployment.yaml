@@ -1,0 +1,122 @@
+# First, we need a PVC to hold Wordpresss software
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-testblog
+  labels:
+    app: testblog
+spec:
+  # Make sure that your (default) storage class has default reclaim policy set to "Retain".
+  # Otherwise, (if it is set to "Delete"), 
+  #   you will lose data as soon as you delete volume claims.
+  # Check with: kubectl describe sc standard 
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+# Next, we need the WORDPRESS_* environment variables as a secret, 
+#       which I will create from command-line.
+#  These WORDPRESS_* env vars will be used by wordpress deployment.
+#  These variables may also be created by the CI server. 
+#     How they will be used to create k8s secret?
+# Next, I need to create the actual wordpress deployment
+
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: testblog
+  labels:
+    app: testblog
+spec:
+  selector:
+    matchLabels:
+      app: testblog
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: testblog
+        tier: frontend
+    spec:
+      containers:
+      - image: wordpress:5.3-apache
+        name: testblog
+        env:
+        - name: WORDPRESS_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_HOST
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_NAME
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_USER
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_PASSWORD
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          limits:
+            cpu: 50m
+            memory: 100Mi
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: testblog-persistent-storage
+          mountPath: /var/www/html
+      volumes:
+      - name: testblog-persistent-storage
+        persistentVolumeClaim:
+          claimName: pvc-testblog
+
+---
+
+# Lastly we need service (and ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: testblog
+  labels:
+    app: testblog
+spec:
+  ports:
+    - port: 80
+  selector:
+    app: testblog
+    tier: frontend
+  type: ClusterIP
+
+------
+
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: testblog
+spec:
+  rules:
+  - host: testblog.demo.wbitt.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: testblog
+          servicePort: 80
+

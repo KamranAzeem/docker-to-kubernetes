@@ -1,0 +1,70 @@
+version: '3.1'
+
+services:
+
+  wordpress:
+    image: wordpress:latest
+    labels:
+      - traefik.frontend.rule=Host:wp.demo.wbitt.com,demo.wbitt.com,www.demo.wbitt.com
+      - traefik.port=80
+      - traefik.enable=true
+    env_file:
+      - wordpress.env
+    # OR:
+    #environment:
+    #  - WORDPRESS_DB_HOST=mysql
+    #  - WORDPRESS_DB_NAME=wordpressdb
+    #  - WORDPRESS_DB_USER=wordpressuser
+    #  - WORDPRESS_DB_PASSWORD=wordpresspass
+    volumes:
+      - /home/kamran/tmp/wordpress:/var/www/html
+
+    depends_on:
+      - mysql
+
+    networks:
+      # This 'uses' the network called 'services-network'
+      # This container also connect to db-network.
+      - services-network
+      - db-network
+
+  # MySQL web-admin panel. Better than PHPMyAdmin
+  adminer:
+    image: adminer
+    labels:
+      - traefik.frontend.rule=Host:adminer.demo.wbitt.com,dbadmin.demo.wbitt.com
+      - traefik.port=8080
+      - traefik.enable=true
+
+    depends_on:
+      - mysql
+
+    networks:
+      - services-network
+      - db-network
+
+  mysql:
+    image: mysql:5.7
+    env_file:
+      - mysql.env
+    # OR: 
+    #environment:
+    #  - MYSQL_ROOT_PASSWORD=secretpassword
+    #  - MYSQL_DATABASE=wordpressdb
+    #  - MYSQL_USER=wordpressuser
+    #  - MYSQL_PASSWORD=wordpresspass
+    volumes:
+      - db:/var/lib/mysql
+    networks:
+      # DB is on a separate network.
+      # And, using this method, it is available by name, as "mysql", to apache containers.
+      - db-network
+
+volumes:
+  db:
+
+networks:
+  services-network:
+    external: true
+  db-network:
+

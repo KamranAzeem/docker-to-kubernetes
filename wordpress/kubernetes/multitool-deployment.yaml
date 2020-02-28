@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multitool
+  labels:
+    app: multitool
+spec:
+  selector:
+    matchLabels:
+      app: multitool
+      tier: frontend
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: multitool
+        tier: frontend
+    spec:
+      containers:
+      - image: praqma/network-multitool
+        name: multitool
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          limits:
+            cpu: 10m
+            memory: 50Mi
+          requests:
+            cpu: 5m
+            memory: 10Mi
+        volumeMounts:
+        - name: multitool-persistent-storage
+          mountPath: /mnt/data
+      volumes:
+      - name: multitool-persistent-storage
+        persistentVolumeClaim:
+          # The claimName is actually the name of existing PVC of a wordpress application.
+          # This is used to restore the data into the PVC.
+          claimName: pvc-testblog
+
+

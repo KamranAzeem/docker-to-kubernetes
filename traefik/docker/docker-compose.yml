@@ -1,0 +1,26 @@
+version: "3"
+services:
+
+  traefik:
+    image: traefik:1.7
+    labels:
+      - traefik.frontend.rule=Host:traefik.demo.wbitt.com
+      - traefik.port=8080
+      - traefik.enable=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}/traefik.toml:/etc/traefik/traefik.toml
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080 
+    networks:
+      # This 'uses' the network called 'services-network'
+      - services-network
+
+networks:
+  # services-network needs to be created manually on the docker host, using:
+  # $ docker network create services-network
+  services-network:
+    external: true
+

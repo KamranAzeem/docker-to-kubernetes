@@ -1,0 +1,109 @@
+# Statefulset does not need a dedicated definition of an object of type  PersistentVolumeClaim .
+
+apiVersion: apps/v1
+
+kind: StatefulSet
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+      tier: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+        tier: mysql
+    spec:
+      containers:
+      - image: mysql:5.7
+        # On GKE and other cloud providers, if a fresh PVC is created, 
+        #   it creates a "lost+found" directory on the root of the fresh/emtpy file-system.
+        #   This causes mysql startup process to panic , and never start. 
+        #   The error in such case is normally found in the logs of the failing pod:
+        #   "[ERROR] --initialize specified but the data directory has files in it. Aborting."
+        #   This does not happen on minikube, 
+        #     as minikube uses a host-path (/tmp) as a backend for it's storageclass ("standard").
+        #   If using plain docker, you do not experience this, 
+        #     as normally the directory you are mounting on /var/lib/mysql 
+        #     is some freshly-created subdirectory of a filesystem.
+        args:
+        - "--ignore-db-dir=lost+found"
+        name: mysql
+        env:
+        # Note: The ENV vars need to be created manually, using create-mysql-credentials.sh
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: MYSQL_DATABASE
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: MYSQL_PASSWORD
+        ports:
+        - containerPort: 3306
+          name: mysql
+        resources:
+          limits:
+            cpu: 50m
+            memory: 300Mi
+          requests:
+            cpu: 50m
+            memory: 200Mi
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-persistent-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 100Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+    tier: mysql
+  clusterIP: None
+
+# Note: 
+# For clusterIP:None (aka headless service), read this:
+#    https://medium.com/faun/kubernetes-headless-service-vs-clusterip-and-traffic-distribution-904b058f0dfd
+# In short: If you are using a single pod like a database server(mysql,pgsql), 
+#    you can use headless service. 
+#    But if you are going to run multiple pods for a service, 
+#    it is better to create clusterIP type kubernetes service.
+# ClusterIP:none creates necessary DNS entries for a service, 
+#                and, these entries have proper backend pointing to the backend containers,
+#                but, there is no load balancing.
+# type:ClusterIP creates same as above, but also provides load balancing between multiple backends.
+
+

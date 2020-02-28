@@ -1,0 +1,104 @@
+##########################################################################################
+# Note:
+# -----
+# This file is created just for the sake of example, to show functionality of Statefulset.
+# Ideally wordpress should not be setup as a statefulset. 
+#   You should use Deployment for such applications.
+# Statefulset does not use dedicated declaration of PersistentVolumeClaim.
+##########################################################################################
+
+# Next, we need the WORDPRESS_* environment variables as a secret, 
+#       which I will create from command-line.
+#  These WORDPRESS_* env vars will be used by wordpress deployment.
+#  These variables may also be created by the CI server. 
+#     How they will be used to create k8s secret?
+# Next, I need to create the actual wordpress deployment
+
+apiVersion: apps/v1 
+kind: StatefulSet
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+spec:
+  # "serviceName" is REQUIRED in statefulset. 
+  #   If it is missing K8s will not create the  statefulset.
+  # The service needs to be created separately. 
+  # The service does not need to be headless. It can be of type LoadBalancer, as in wordpress.
+
+  serviceName: wordpress
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: frontend
+    spec:
+      containers:
+      - image: wordpress:5.3-apache
+        name: wordpress
+        env:
+        - name: WORDPRESS_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_HOST
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_NAME
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_USER
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-credentials
+              key: WORDPRESS_DB_PASSWORD
+        ports:
+        - containerPort: 80
+          name: wordpress
+        resources:
+          limits:
+            cpu: 50m
+            memory: 100Mi
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+  volumeClaimTemplates:
+  - metadata:
+      name: wordpress-persistent-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Gi
+---
+
+# Lastly we need service (and ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+spec:
+  ports:
+    - port: 80
+  selector:
+    app: wordpress
+    tier: frontend
+  type: ClusterIP
+
+
