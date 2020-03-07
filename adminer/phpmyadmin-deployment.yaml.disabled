@@ -1,0 +1,59 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: phpmyadmin
+  labels:
+    app: phpmyadmin
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: phpmyadmin
+    spec:
+      containers:
+      - name: phpmyadmin
+        image: phpmyadmin/phpmyadmin
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: "100m"
+          requests:
+            cpu: 10m
+    
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: phpmyadmin
+  labels:
+    name: phpmyadmin
+    app: phpmyadmin
+spec:
+  ports:
+    - port: 80
+  selector:
+    app: phpmyadmin
+
+---
+
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: phpmyadmin
+  annotations:
+    kubernetes.io/ingress.class: traefik
+  labels:
+    app: phpmyadmin
+spec:
+  rules:
+  - host: phpmyadmin.demo.wbitt.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: phpmyadmin
+          servicePort: 80
+
