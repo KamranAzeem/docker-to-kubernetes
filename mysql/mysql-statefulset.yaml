@@ -1,5 +1,7 @@
 # Statefulset does not need a dedicated definition of an object of type  PersistentVolumeClaim .
 
+# Add rediness probes - Todo.
+
 apiVersion: apps/v1
 
 kind: StatefulSet
@@ -42,28 +44,13 @@ spec:
             secretKeyRef:
               name: mysql-credentials
               key: MYSQL_ROOT_PASSWORD
-        - name: MYSQL_DATABASE
-          valueFrom:
-            secretKeyRef:
-              name: mysql-credentials
-              key: MYSQL_DATABASE
-        - name: MYSQL_USER
-          valueFrom:
-            secretKeyRef:
-              name: mysql-credentials
-              key: MYSQL_USER
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-credentials
-              key: MYSQL_PASSWORD
         ports:
         - containerPort: 3306
           name: mysql
         resources:
           limits:
-            cpu: 50m
-            memory: 300Mi
+            cpu: 500m
+            memory: 500Mi
           requests:
             cpu: 50m
             memory: 200Mi
@@ -77,7 +64,7 @@ spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
-          storage: 100Mi
+          storage: 1Gi
 
 ---
 apiVersion: v1

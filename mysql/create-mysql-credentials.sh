@@ -8,7 +8,7 @@ if [ ! -f ./mysql.env ]; then
 fi
 
 echo "First delete the old secret: mysql-credentials"
-kubectl delete secret mysql-credentials
+kubectl delete secret mysql-credentials  || true
 
 echo "Found mysql.env file, creating kubernetes secret: mysql-credentials"
 source ./mysql.env
