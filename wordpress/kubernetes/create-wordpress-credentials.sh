@@ -3,12 +3,12 @@
 # It needs to be capable for creating k8s secrets by reading ENV variables as well,
 #   as, that is the case with CI systems.
 if [ ! -f ./wordpress.env ]; then
-  echo "Could not find ENV variables file for wordpress - ./wordpress.env"
+  echo "Could not find ENV variables file for wordpress. The file is missing: ./wordpress.env"
   exit 1
 fi
 
-echo "First delete the old secret: wordpress-credentials"
-kubectl delete secret wordpress-credentials
+echo "First, deleting the old secret: wordpress-credentials"
+kubectl delete secret wordpress-credentials || true
 
 echo "Found wordpress.env file, creating kubernetes secret: wordpress-credentials"
 

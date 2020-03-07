@@ -1,33 +1,11 @@
-# First, we need a PVC to hold Wordpresss software
-
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: pvc-testblog
-  labels:
-    app: testblog
-spec:
-  # Make sure that your (default) storage class has default reclaim policy set to "Retain".
-  # Otherwise, (if it is set to "Delete"), 
-  #   you will lose data as soon as you delete volume claims.
-  # Check with: kubectl describe sc standard 
-  storageClassName: standard
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-
----
-
-# Next, we need the WORDPRESS_* environment variables as a secret, 
+# We need the WORDPRESS_* environment variables as a secret, 
 #       which I will create from command-line.
 #  These WORDPRESS_* env vars will be used by wordpress deployment.
 #  These variables may also be created by the CI server. 
 #     How they will be used to create k8s secret?
 # Next, I need to create the actual wordpress deployment
 
-apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: testblog
@@ -73,8 +51,8 @@ spec:
           name: http
         resources:
           limits:
-            cpu: 50m
-            memory: 100Mi
+            cpu: 100m
+            memory: 200Mi
           requests:
             cpu: 10m
             memory: 10Mi
@@ -88,7 +66,7 @@ spec:
 
 ---
 
-# Lastly we need service (and ingress)
+# We need service
 apiVersion: v1
 kind: Service
 metadata:
@@ -103,9 +81,9 @@ spec:
     tier: frontend
   type: ClusterIP
 
-------
+---
 
-
+# We need an ingress
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
