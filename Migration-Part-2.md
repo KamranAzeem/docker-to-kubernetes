@@ -1,18 +1,16 @@
-This is part 2 of the Docker to Kubernetes migration.
+# Using CircleCI as CD (Continuous Delivery) server to deploy applications on Kubernetes:
 
-In this part, I am going to use another example. A simple web application, which does not maintain state, but it builds it's private image every time. This example is suitable to explain the concepts of CD, especially on GCP . 
+This is part 2 of the Docker to Kubernetes migration. In this part, I am going to use another example of a simple web application, which does not maintain state, but it builds it's private image every time. This example is suitable to explain the concepts of CD, especially on GCP.
 
 **Note:** This document does not cover the CI (Continuous Integration) aspect of application development. That is a topic for later.
 
 The CD server of our choice is CircleCI. 
 
-The repositories used are:
+The repository used is:
 * https://github.com/KamranAzeem/simpleapp.demo.wbitt.com
-* https://github.com/KamranAzeem/docker-to-kubernetes
-
 
 ## Analysis of existing application:
-This simple web application was running as a docker-compose application on a production server. We are moving it to Kubernetes. The first step is to make sure that the DNS is updated so `simpleapp.demo.wbitt.com` points to the IP address of our Traefik load balancer.
+This simple web application was running as a docker-compose application on a production server. We are moving it to Kubernetes. The first step is to make sure that the DNS is updated, which means that `simpleapp.demo.wbitt.com` points to the IP address of our Traefik load balancer.
 
 ```
 [kamran@kworkhorse docker-to-kubernetes]$ dig simpleapp.demo.wbitt.com
@@ -27,7 +25,7 @@ traefik.demo.wbitt.com.	299	IN	A	35.228.250.6
 [kamran@kworkhorse docker-to-kubernetes]$
 ```
 
-Examine the existing docker-compose.server.yml file for this application:
+Examine the existing `docker-compose.server.yml` file for this application:
 ```
 version: "3"
 services:
@@ -155,7 +153,6 @@ dir=/home
 user=someone
 demo=true
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-
 ```
 
 ```
@@ -277,12 +274,11 @@ spec:
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
 
-We also need a service and ingress. This is a separate file, as we don't expect service and ingress definition to change constantly. Though this can be part of the main `deployment.yaml` file without any harm.
+We also need a service and ingress for this deployment. This is a separate file, as we don't expect service and ingress definition to change constantly. Though this can be part of the main `deployment.yaml` file without any harm.
 
 ```
 [kamran@kworkhorse docker-to-kubernetes]$ cat simpleapp-service-ingress.yaml 
 
- # We need service
 apiVersion: v1
 kind: Service
 metadata:
@@ -299,7 +295,6 @@ spec:
 
 ---
 
- # We need an ingress
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
@@ -333,7 +328,6 @@ testblog-54f855f697-5qdmz               1/1     Running   0          24h
 ```
 
 Setup service and ingress:
-
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl apply -f service-ingress.yaml 
 service/simpleapp created
@@ -343,7 +337,6 @@ ingress.extensions/simpleapp created
 
 
 Verify:
-
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get deployments
 NAME        READY   UP-TO-DATE   AVAILABLE   AGE
@@ -388,7 +381,7 @@ Here are some screenshots:
 | ------------------------------------------------------------------------------- |
 
 
-It works!
+**It works!**
 
 ------
 
@@ -405,8 +398,6 @@ Give some access Roles to this newly created service account. For example's sake
 
 
 After setting permissions, create a key for this service account, by using "Create Key" button on next screen. Use type JSON. The key will download immediately to your computer, only once. Make a note of it's location. Keep it safe.
-
-Find the JSON file, and `cat` it on the terminal. Leave this here as it is, until we setup CircleCI.
 
 
 | ![images/ci_1.png](images/ci_1.png) |
@@ -427,6 +418,11 @@ Find the JSON file, and `cat` it on the terminal. Leave this here as it is, unti
 | ![images/ci_6.png](images/ci_6.png) |
 | ----------------------------------- |
 
+
+Find the JSON file, and `cat` it on the terminal. Leave this here as it is, until we setup CircleCI.
+
+| ![images/ci_8.png](images/ci_8.png) |
+| ----------------------------------- |
 
 You also need to know ID of the current GKE project, which you can obtain by simply visiting the Home section of the current project. The Project ID is listed over there. For my project, the id is: `trainingvideos` .
 
@@ -453,12 +449,12 @@ Select "Start Building". Select "Add Manually" on next screen. Click "Start Buil
 | ----------------------------------------------------------- |
 
 
-We setup `GCLOUD_CREDENTIALS	` as environment variable . In the Project settings of this project. Go to Environment variables, and add an environment variable called `GCLOUD_CREDENTIALS`. Copy the text of the `JSON` file from the text terminal and paste it in as a value for this variable.
-
-| ![images/ci_7.png](images/ci_7.png) |
-| ----------------------------------- |
+We setup `GCLOUD_CREDENTIALS	` as environment variable . In the Project settings of this project, go to Environment variables, and add an environment variable called `GCLOUD_CREDENTIALS`. Copy the text of the `JSON` file from the text terminal and paste it in as a value for this variable.
 
 | ![images/ci_8.png](images/ci_8.png) |
+| ----------------------------------- |
+
+| ![images/ci_7.png](images/ci_7.png) |
 | ----------------------------------- |
 
 
@@ -503,8 +499,6 @@ Create CircleCI environment variables for our fictional configuration file and t
 | ----------------------------------- |
 
 
-Screenshot
-
 Update `.circleci/config.yml` to use these environment variables as needed. Then, push this updated `.circleci/config.yml` to the repository. CircleCI will see the change and will start processing it. You will notice a "workflow" showing up in CircleCI web interface.
 
 
@@ -517,6 +511,74 @@ At this point, CircleCI will perform all the steps configured in it's `config.ym
 | ------------------------------------- |
 
 
+Here is the complete `.circleci/config.yml` file:
+
+```
+[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat .circleci/config.yml | grep -v ^$
+version: 2
+jobs:
+  build:
+    docker:
+      - image: google/cloud-sdk
+    steps: 
+      - run: 
+          name: authenticate with gcloud
+          command: |
+            echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
+            gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
+      - checkout             
+      - setup_remote_docker
+      - run: |
+          gcloud auth configure-docker --quiet
+          SHORT_HASH=$(echo $CIRCLE_SHA1 | cut -c -7)      
+          docker build -t eu.gcr.io/trainingvideos/simpleapp:${SHORT_HASH} .
+          docker push eu.gcr.io/trainingvideos/simpleapp:${SHORT_HASH}
+  deploy:
+    docker:
+      - image: google/cloud-sdk  
+    steps: 
+      - run: 
+          name: authenticate with gcloud
+          command: |
+            echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
+            gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
+            gcloud container clusters get-credentials docker-to-k8s --zone europe-north1-a --project trainingvideos
+      - checkout             
+      - run: |
+          echo ${SIMPLEAPP_CONF} > simpleapp.conf
+          echo "First, deleting the old configmap: configmap-simpleapp-conf"
+          kubectl delete configmap configmap-simpleapp-conf || true
+          echo "Creating the new configmap: configmap-simpleapp-conf - using CircleCI environment variable"
+          kubectl create  configmap configmap-simpleapp-conf --from-file=simpleapp.conf
+          echo "First, deleting the old secret: simpleapp-credentials"
+          kubectl delete secret simpleapp-credentials || true
+          echo "Creating kubernetes secret: simpleapp-credentials - using CircleCI Environment variables"
+          kubectl create secret generic simpleapp-credentials \
+            --from-literal=MYSQL_HOST=${MYSQL_HOST} \
+            --from-literal=MYSQL_DATABASE=${MYSQL_DATABASE} \
+            --from-literal=MYSQL_USER=${MYSQL_USER} \
+            --from-literal=MYSQL_PASSWORD=${MYSQL_PASSWORD}
+          SHORT_HASH=$(echo $CIRCLE_SHA1 | cut -c -7)      
+          echo "SHORT_HASH is: ${SHORT_HASH}"
+          sed  s/SHORT_HASH/$SHORT_HASH/ deployment.yaml.template > deployment.yaml
+          kubectl apply -f deployment.yaml 
+          kubectl apply -f service-ingress.yaml
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs: 
+      - build:
+          filters:
+            branches: 
+              only: master
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches: 
+              only: master
+[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
+```
 
 After successful run you see the objects in Kubernetes:
 
@@ -591,7 +653,7 @@ Notice that the change we introduced in our `index.html` is now visible on the w
 | ![images/ci_29.png](images/ci_29.png) |
 | ------------------------------------- |
 
-So, It works!
+So, **It works!**
 
 There you have it, your application being deployed continuously using CircleCI.
 
