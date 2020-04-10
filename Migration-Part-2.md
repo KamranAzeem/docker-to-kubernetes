@@ -319,6 +319,10 @@ spec:
 [kamran@kworkhorse docker-to-kubernetes]$ 
 ```
 
+At this point, backup and restore the application's database from existing DB server to MySQL instance in kubernetes.Also fix DNS , so `simpleapp.demo.wbitt.com` now points to the IP address of reverse proxy in the Kubernetes cluster.
+
+
+
 Deploy the application:
 
 ```

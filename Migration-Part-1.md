@@ -258,14 +258,18 @@ Remember to fix the email address in `traefik.toml` file.
 [kamran@kworkhorse kubernetes]$ pwd
 /home/kamran/Projects/Personal/github/docker-to-kubernetes/traefik/kubernetes
 
-
-[kamran@kworkhorse kubernetes]$ htpasswd -c -b dashboard-users.htpasswd admin secretpassword
-
 [kamran@kworkhorse kubernetes]$ kubectl  --namespace=kube-system  create configmap configmap-traefik-toml --from-file=traefik.toml
 configmap/configmap-traefik-toml created
 
+[kamran@kworkhorse kubernetes]$ htpasswd -c -b dashboard-users.htpasswd admin secretpassword
+
 [kamran@kworkhorse kubernetes]$ kubectl  --namespace=kube-system  create secret generic secret-traefik-dashboard-users --from-file=dashboard-users.htpasswd
 secret/secret-traefik-dashboard-users created
+
+[kamran@kworkhorse kubernetes]$ kubectl apply -f traefik-rbac.yaml 
+clusterrole.rbac.authorization.k8s.io/traefik-ingress-controller created
+clusterrolebinding.rbac.authorization.k8s.io/traefik-ingress-controller created
+
 
 [kamran@kworkhorse kubernetes]$ kubectl apply -f traefik-deployment.yaml
 serviceaccount/traefik-ingress-controller created
@@ -328,6 +332,15 @@ Verify by looking at Traefik web interface.
 
 | ![images/traefik-web-ui-intial.png](images/traefik-web-ui-intial.png) |
 | --------------------------------------------------------------------- |
+
+
+**Note:** If you configured Traefik to obtain SSL certificates from **staging servers** , then at this point in time re-configure Traefik to use LetsEncrypt **production servers** . Perform the following steps:
+* Delete the Traefik deployment
+* Delete PVC used by Traefik
+* Delete Traefik configmap (used for `traefik.toml`)
+* Edit `traefik.toml` file and update address of certificate servers
+* Re-create configmap for `traefik.toml`
+* Re-create Traefik deployment and the related PVC by: `kubectl apply -f traefik-deployment.yaml`
 
 
 ### Setup MySQL:
@@ -661,6 +674,8 @@ secret/wordpress-credentials created
 [kamran@kworkhorse kubernetes]$ 
 ```
 
+**Note:** At this point, setup DNS correctly, so `testblog.demo.wbitt.com` points to the IP address of the reverse proxy in the k8s cluster. 
+
 In the `wordpress-deployment.yaml` file, ensure that the ingress has correct host name set for the wordpress website. i.e `testblog.demo.wbitt.com` . Then create the deployment:
 
 ```
@@ -687,18 +702,30 @@ As soon as the deployment is created, this wordpress application will start. It 
 
 Don't worry. Wordpress does not have the file content yet. Just be sure that at this point, you **do not perform any actions on the web interface**. Instead, use `kubectl cp ...` command to copy the tarball  of web content inside this container, and unzip/untar it.
 
+Now, copy the disk-state of this website from exiting docker server to local computer.
+
+```
+[kamran@kworkhorse ~]$ ssh witpass@web.witpass.co.uk
+[witpass@web ~]$ cd /home/containers-data/testblog.demo.wbitt.com/
+[witpass@web testblog.demo.wbitt.com]$ tar czf /tmp/testblog.demo.wbitt.com.tar.gz .
+```
+
+```
+[kamran@kworkhorse ~]$ cd /tmp/
+[kamran@kworkhorse tmp]$ scp witpass@web.witpass.co.uk:/tmp/testblog.demo.wbitt.com.tar.gz .
+```
+
 So lets move into the directory on local computer, which has the file content from previous server and copy the web-content tarball to this container.
 
 ```
-[kamran@kworkhorse docker-to-kubernetes-data]$ pwd
-/home/kamran/tmp/docker-to-kubernetes-data
+[kamran@kworkhorse tmp]$ pwd
 
-[kamran@kworkhorse docker-to-kubernetes-data]$ ls -l
+[kamran@kworkhorse tmp]$ ls -l
 total 12900
 -rw-r--r-- 1 kamran kamran   569038 Mar  7 19:20 db_testblog.demo.wbitt.com.dump
 -rw-r--r-- 1 kamran kamran 12637119 Feb 28 13:54 testblog.demo.wbitt.com.tar.gz
 
-[kamran@kworkhorse docker-to-kubernetes-data]$ kubectl cp testblog.demo.wbitt.com.tar.gz testblog-54f855f697-n6bz2:/tmp/ 
+[kamran@kworkhorse tmp]$ kubectl cp testblog.demo.wbitt.com.tar.gz testblog-54f855f697-n6bz2:/tmp/ 
 ```
 
 Now, login interactively to the pod/container on the OS level , using kubectl. Do some basic info collection steps:
