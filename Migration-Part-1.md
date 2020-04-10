@@ -2,9 +2,9 @@
 
 # Docker-Compose to Kubernetes
 
-This article talks about the ways to move your applications running on docker-compose to a Kubernetes cluster on GCP. It also shows how to achieve "continuous delivery" to get this done. The audience of this article are both the system admins and the developers. The article guides the system/cluster admins on how to migrate the various infrastructure services from docker-compose to the kubernetes cluster. It also guides the developers on how to migrate their applications from docker-compose to Kubernetes, and most importantly how to "continuously" deploy their applications on a Kubernetes cluster using a CD tool.
+This article talks about the ways to move your applications running on docker-compose to a Kubernetes cluster on GCP. It also shows how to achieve "continuous delivery" to get this done. The audience of this article are both the system admins and the developers. The article guides the system/cluster admins on how to migrate the various infrastructure services from docker-compose to the kubernetes cluster. It also guides the developers on how to migrate their applications from docker-compose to Kubernetes, and most importantly how to "continuously" deploy their applications on a Kubernetes cluster using a CI/CD tool.
 
-Moving your applications to Kubernetes is not straight-forward. (Developing your apps for Kubernetes is not straight-forward either). State is hard. Kubernetes has a lot of moving parts. Many of the concepts are new. In short, there are many potential pitfalls. You really need to have a clear understanding of how your current application works. You also need to understand how Kubernetes works. It is going to be bit painful, feel complex; but it will reward you in spades.
+Moving your applications to Kubernetes is not straight-forward. (Developing your apps for Kubernetes is not straight-forward either). **State is hard**. Kubernetes has a lot of moving parts. Many of the concepts are new. In short, there are many potential pitfalls. You really need to have a clear understanding of how your current application works. You also need to understand how Kubernetes works. It is going to be bit painful, feel complex; but it will reward you in spades.
 
 There are two very important things to remember before we start on this journey:
 1. **Kubernetes != Docker/Compose**
@@ -12,6 +12,11 @@ There are two very important things to remember before we start on this journey:
 
 
 This article will show all the steps performed on an actual production setup, running applications on docker-compose. So this is a real deal!
+
+## Prerequisites:
+The following need to be installed and setup correctly on your computer, before we continue.
+* gcloud
+* kubectl
 
 ## Existing setup:
 I am helping a friend of mine to manage his current setup on AWS, who wants to move to Kubernetes. The setup consists of three servers:
@@ -27,13 +32,13 @@ I am helping a friend of mine to manage his current setup on AWS, who wants to m
 
 
 **Important note:**
-I am aware this is not an optimal setup, and there are few single points of failure. This was actually a "proof-of-concept" move to the cloud, which suddenly became "production". We wanted to keep the cost to lowest possible, without sacrificing any functionality, thus the small/minimal amount of servers.
+I am aware above is not an optimal setup, and there are few single points of failure. This was actually a "proof-of-concept" move to the cloud, which suddenly became "production". We wanted to keep the cost to lowest possible, without sacrificing any functionality, thus the small/minimal amount of servers.
 
 ### Problems in existing setup:
 * Of course there is no resilience, no fault tolerance.
 * The DB server can go down any moment. If it goes down (crashes), we have to rebuild it from backups.
 * The capacity on the current application servers is a constant problem.
-* Applications on one server cannot talk to the applications on the other server, because all applications run on an internal docker network on each server.
+* Applications on one server cannot talk to the applications on the other server, because all applications run on a separate internal docker network on each server.
 * Setting up resource limits on docker-compose is not possible, unless one is using docker-swarm, which we don't.
 * We cannot move one application to another server without manual/admin intervention. 
 * The applications are being deployed manually, not through any CI/CD pipeline.
@@ -41,7 +46,7 @@ I am aware this is not an optimal setup, and there are few single points of fail
 * In case any of the application server fails (crashes), we would need to rebuild it from backups.
 
 ## Advantages in moving to Kubernetes:
-* A lot of resilience, because Kubernetes promises resilience on top of everything else.
+* **Resilience**, because Kubernetes promises resilience on top of everything else.
 * Pods can relocate to surviving nodes without admin intervention.
 * Cluster capacity can be increased (or decreased) at will by adding (or removing) worker nodes.
 * There is one large pod network, and all pods/containers talk to each other - except when prohibited by network policies, not discussed in this article.
@@ -52,36 +57,17 @@ I am aware this is not an optimal setup, and there are few single points of fail
 
 
 ## Why move to GCP/GKE? Why not AWS/EKS? or any other?
-First, we don't want to be managing the kubernetes cluster ourselves. So the only choices were: GKE, GKE or GKE :)
-
-I have experience of setting up and using Kubernetes cluster on different cloud providers, and found GKE to be the best. We know that AWS being the first cloud provider, has a very large number of customers. That is true. But, when Kubernetes came out, AWS made a mistake of sticking to their guns (ECS). When Kubernetes got enough traction, they also decided to join the party, but were late. Their "Kubernetes as a Service" - EKS - is just plain horrible. It is a mess. Although we are currently running our setup on AWS, we are not married to it, and we don't have children with it (like using AWS's other services), so we can definitely move away to a more solid platform. GCP/GKE is the gold standard anyway, so our choice is GKE.
+I have experience of setting up and using Kubernetes cluster on different cloud providers, and found GKE to be the best. We know that AWS being the first cloud provider, has a very large number of customers. That is true. But, when Kubernetes came out, AWS made a mistake of sticking to their guns (ECS). When Kubernetes got enough traction, they also decided to join the party, but were late. Their "Kubernetes as a Service" - EKS - is just plain horrible. It is a mess. Although we are currently running our setup on AWS, we are not married to it, and we don't have children with it (like using AWS's other services), so we can definitely move away to a more solid platform. GCP/GKE is the gold standard anyway. If I start writing about all the goodness GKE/GCP provides, this article will become a book! So, in short, our choice is GKE.
 
 
 ## Two sample applications running on my servers:
 I have two simple applications running on my current server(s), which I will use to explain various concepts.
 
-* A simple static/HTML/PHP website [https://github.com/KamranAzeem/simple.demo.wbitt.com](https://github.com/KamranAzeem/simple.demo.wbitt.com)
 * A simple WordPress website [https://github.com/KamranAzeem/testblog.demo.wbitt.com](https://github.com/KamranAzeem/testblog.demo.wbitt.com)
+* A simple HTML/PHP website [https://github.com/KamranAzeem/simple.demo.wbitt.com](https://github.com/KamranAzeem/simple.demo.wbitt.com)
 
 
-### A simple HTML+PHP website:
-The simple static/HTML/PHP website has the following properties:
-
-* Site name: `simple.demo.wbitt.com` , which points to the IP address of `web.witpass.co.uk` where all our wordpress based websites are running as docker containers.
-* This website has static HTML content and builds a nginx based docker image at the time of start-up.
-* This website also has some PHP files representing a simple dynamic (yet stateless) application. This would need to run through some PHP parser.
-* One (imaginary) requirement is that the resulting docker image should be a private image. So this will need to be stored inside a private container repository. On GCP this is easily achievable. 
-* This site/application needs some MySQL credentials to talk to a MySQL database. This information will be passed as environment variables.
-* This site does not need to store any state on file-system
-* This site uses a configuration file for it's internal use, and expects it at a location `/config/site.conf` on the file system of the running container.
-
-**Note:** I know this is a simple/static/HTML file, and it does not need a config file. This (config file thing) is completely made-up, because I want to demonstrate something important around this, when we move this to Kubernetes. So there is no harm in assuming that there is a config file.
-
-| ![images/simplesite.png](images/simplesite.png) |
-| ----------------------------------------------- |
-
-
-### A simple Wordpress website:
+### The Wordpress website:
 
 Here is the `docker-compose.server.yml` file for my (test) blog website:
 
@@ -138,6 +124,22 @@ Based on the information we see in the docker-compose file above, the WordPress 
 | ![images/testblog.png](images/testblog.png) |
 | ------------------------------------------- |
 
+### The HTML+PHP website:
+The simple static/HTML/PHP website has the following properties:
+
+* Site name: `simple.demo.wbitt.com` , which points to the IP address of `web.witpass.co.uk` where all our wordpress based websites are running as docker containers.
+* This website has static HTML content and builds a nginx based docker image at the time of start-up.
+* This website also has some PHP files representing a simple dynamic (yet stateless) application. This would need to run through some PHP parser.
+* One (imaginary) requirement is that the resulting docker image should be a private image. So this will need to be stored inside a private container repository. On GCP this is easily achievable. 
+* This site/application needs some MySQL credentials to talk to a MySQL database. This information will be passed as environment variables.
+* This site does not need to store any state on file-system
+* This site uses a configuration file for it's internal use, and expects it at a location `/config/site.conf` on the file system of the running container.
+
+**Note:** I know this is a simple/static/HTML file, and it does not need a config file. This (config file thing) is completely made-up, because I want to demonstrate something important around this, when we move this to Kubernetes. So there is no harm in assuming that there is a config file.
+
+| ![images/simplesite.png](images/simplesite.png) |
+| ----------------------------------------------- |
+
 
 ## Kubernetes setup:
 
@@ -155,30 +157,30 @@ Lets talk about MySQL only. In Kubernetes terms, the MySQL instance needs:
 * an internal/cluster service, so MySQL is accessible to all the services wishing to connect to it, within the same namespace.
 * a way to be accessible / used by the admin from the internet, to be able to create databases and users for various applications / websites. For this, we would setup a very small and secure web interface for mysql, named `Adminer`. This Adminer software will have a "Deployment", a "Service" and an "Ingress", so we can access it from the internet. See note below.
 
-**Note:** The database service will be setup by the main cluster administrator, and will be a one time activity. Though the process of creation of this service can be defined / saved as a github repository , in the form of `yaml` files. This does not need to be part of a CI/CD pipeline.
+**Note:** The database service will be setup by the main cluster administrator, so **this will be one time activity**. Though the process of creation of this service can be defined / saved as a github repository , in the form of `yaml` files, it does not need to be part of a CI/CD pipeline.
 
 **Note:** Personally, I dislike the idea of providing global access to my database instance through any web interface. Refer to `The best way to access your database instance in Kubernetes` in this article.
 
 ### The ingress controller:
-Since the Adminer interface needs to be accessed over the internet, we already defined an ingress object for it. But for Ingress object to work, we need an **"Ingress Controller"**. This ingress controller will be a service defined as `type: LoadBalancer`. In the docker-compose setup, we have Traefik running as the ingress controller - sort of. In our Kubernetes setup, we will continue to use Traefik as Ingress controller. 
+We will be setting up our website to be accessible over the internet. For that to work, we need an **ingress controller** in the cluster. This ingress controller will be a service - defined as `type: LoadBalancer`. In the docker-compose setup, we have Traefik running as the ingress controller - sort of. In our Kubernetes setup, we will continue to use Traefik (1.7) as Ingress controller. 
 
-**Note:** The setup of Ingress Controller will also be a one time activity by the administrator.
+**Note:** The setup of Ingress Controller will also be a **one time activity** by the administrator.
 
 ### The individual applications:
 Now we discuss the Kubernetes related needs of our applications. This is where developers will have the main interest, and they will have the main responsibility for deploying their applications on the cluster.
 
 #### The WordPress application , and it's needs:
-* It needs to be a "Deployment" , so we can scale up (and down) the number of replicas, depending on the load, which still able to serve the files on the (shared) disk from all the instances. This is only possible when you use a Deployment object, and not StatefulSet object.
+* It needs to be a **"Deployment"** , so we can scale up (and down) the number of replicas, depending on the load, which still able to serve the files on the (shared) disk from all the instances. This is only possible when you use a Deployment object, and not StatefulSet object.
 * The Deployment will need an image. In this case, it uses a publicly available docker container image, so that is not a problem.
 * The Deployment will need to know the location of MySQL database server, the DB for this wordpress installation , the DB username and passwords to connect to that database. This information cannot be part of the repository, so it is provided manually on the docker servers as `wordpress.env` file (as an example). On Kubernetes this information needs to be provided as environment variables. The question is, how? There are two ways. One, we create the secret manually from command line. The other way way is to setup the secrets as environment variables in the CI server. We will be using CircleCI for our CI/CD needs. We will see both methods to get this done. 
 * The Deployment will also need a persistent storage for storing various files this wordpress software will create. The same location will also hold any content uploaded by the user, for example pictures, etc. This will be a PVC, and will be created separately. It's definition of creation will not be part of the same file as the `deployment.yaml` . This is to prevent any accidents of old PVCs being deleted and new ones being created automatically resulting in data loss. This problem has been explain in another article of mine: [https://github.com/KamranAzeem/kubernetes-katas/blob/master/08-storage-basic-dynamic-provisioning.md](https://github.com/KamranAzeem/kubernetes-katas/blob/master/08-storage-basic-dynamic-provisioning.md) . Anyhow, the developer will be required to create the necessary PV/PVC once, and then make sure to **never delete the PVC**. Till the time the PVC is there, the data will be safe. 
 
 **Note:** This example uses with wordpress, which is quite "stateful". What we want, from the developers is: applications as stateless as possible. i.e. There should be no involvement of saving any state, eliminating a need to acquire and maintain PVCs and PVs. **This is very important in application design.** 
 
-#### The simple static/HTML site has the following Kubernetes related needs:
-* It needs to be a "Deployment" , so we can scale up (and down) the number of replicas, depending on the load, which still able to serve the files on the (shared) disk from all the instances. This is only possible when you use a Deployment object, and not StatefulSet object.
-* The Deployment will need to (sort of) "build" a private image, which is impossible. Kubernetes objects cannot build container images. (Recall: Kubernetes != Docker). So, for this to work, the image needs to be built outside/before the deployment process is carried out. If the image needs to be a private image, then GCP's [gcr.io](gcr.io) is ideal, as it can create private container images without requiring any extra steps at our end. 
-* The Deployment will also need a (imaginary) configuration file mounted at `/config/site.conf` . One can argue that a configuration file (or files) can be baked into the image itself. For the sake of this example, we will create a config map every time before creating the main deployment. This can be done manually, or through the CI server. In case of CI server, the entire configuration file will need to be stored an an environment variable in the CI server and then be used inside the deployment pipeline. We will show you that too.
+#### The simple static/HTML/PHP application and it's needs:
+* It needs to be a **"Deployment"** , so we can scale up (and down) the number of replicas, depending on the load, which still able to serve the files on the (shared) disk from all the instances. This is only possible when you use a Deployment object, and *not* StatefulSet object.
+* The Deployment will need to use the docker image of our application. Kubernetes objects cannot build container images. (Recall: Kubernetes != Docker). So, for this to work, the image needs to be built outside/before the deployment process is carried out. If the image needs to be a private image, then GCP's [gcr.io](gcr.io) is ideal, as it can create private container images without requiring any extra steps at our end. Though you can choose any container registry of your choice.
+* The Deployment will also need a (imaginary) configuration file mounted at `/config/site.conf` . One can argue that a configuration file (or files) can be baked into the image itself. In our case, the image will come with a default *site.conf*  file, and we can override it anytime by creating a config map with custom configuration, before creating the main deployment. This can be done manually, or through the CI server. In case of CI server, the entire configuration file will need to be stored an an environment variable in the CI server and then be used inside the deployment pipeline. I will show you that too.
 
 
 ## Kubernetes setup:
@@ -200,46 +202,55 @@ gke-docker-to-k8s-default-pool-b0b5bbac-dx7z   Ready    <none>   6m25s   v1.14.1
 
 We will first deploy the wordpress based application to Kubernetes. To be able to deploy that, we would need to perform the following steps, in order:
 
-* Deploy Traefik Ingress Controller, and create it's related service as `type:LoadBalancer` and obtain the public IP. Traefik will be deployed in the very basic form without HTTPS , because this is just a demo, and HTTPS is simply beyond the scope. If you are interested, please consult: [https://github.com/KamranAzeem/kubernetes-katas/tree/master/ingress-traefik/https-letsencrypt-HTTP-Challenge](https://github.com/KamranAzeem/kubernetes-katas/tree/master/ingress-traefik/https-letsencrypt-HTTP-Challenge)
-* Modify our DNS zone for the domain `demo.wbitt.com` and add an entry for `traefik.demo.wbitt.com` and point it to this public IP obtained in the previous step
-* Deploy MySQL as StatefulSet, and create related service
-* [OPTIONAL] Deploy [Adminer](https://www.adminer.org/) as Deployment, and create its related service and ingress. 
-* [OPTIONAL] Add another CNAME entry in the same DNS zone for `adminer.demo.wbitt.com` pointing to `traefik.demo.wbitt.com` . **Note:** During my testing, I found problems setting up `adminer` as `adminer.demo.wbitt.com`, so I change the name to `dbadmin`instead. The only place I used the word "adminer", was the name of "adminer" docker image.
-* [OPTIONAL] Verify that Adminer can connect to the backend MySQL server by using the user root, and the password set as ENV variable for mysql
-* Create a database, user and password in the MySQL instance, for the wordpress application/site (to be setup next)- through command line (forwarded port), or through Adminer.
+* You don't need to stop the existing wordpress instance straight away. It will be stopped few steps later. There is no harm stopping it now, it is just that it will remain down for a longer time, as you will be setting up other components before actually bringing it up in the Kubernetes cluster. However, if you don't want any changes to happen in the site's database while you are working with the cluster setup, then you should stop it.
+* Open DNS zone file in a separate browser tab, and let it remain open. We will come back to it later.
+* Deploy Traefik Ingress Controller, and create it's related service as `type:LoadBalancer` and obtain the public IP. Configure Traefik to use HTTPS using LetsEncrypt **Staging server**. You can use this guide: [https://github.com/KamranAzeem/kubernetes-katas/tree/master/ingress-traefik/https-letsencrypt-HTTP-Challenge](https://github.com/KamranAzeem/kubernetes-katas/tree/master/ingress-traefik/https-letsencrypt-HTTP-Challenge). It is best to keep the Traefik deployment and Traefik service definition files separate.
+* Once you have the IP address for the load balancer, you create a DNS record in the DNS zone file for `demo.wbitt.com`domain. You have it already open in the separate browser tab.
+* Now you setup ingress for `traefik.demo.wbitt.com` , and see if Traefik can get staging certificate for it. If it does, (which it should), then it means LetsEncrypt is correctly setup.
+* Reconfigure Traefik to use SSL certificates from LetsEncrypt's **Production servers**.
+* Deploy MySQL as StatefulSet, and create related service. Do not setup MySQL as type LoadBalancer, NodePort; nor setup an ingress object against it. It must not be accessible directly from outside the cluster.
+* Create a database, user and password in the MySQL instance for the wordpress application/site (to be setup next)- through command line (using forwarded port).
 * Create a PV and PVC for the wordpress deployment.
 * Create the secrets for connecting the wordpress Deployment to the MySQL instance, and make sure that the wordpress deployment is configured to uses those secrets.
-* Stop the related wordpress docker-compose application on the docker server. This will ensure that when you change it's IP address in next steps, Traefik will not panic in trying to arrange SSL certificates for it.
+* Stop the related wordpress docker-compose application on the docker server. 
 * In the DNS server, point `testblog.demo.wbitt.com` (as CNAME) to `traefik.demo.wbitt.com`
 * Deploy the wordpress deployment, service and ingress. 
 
 
-As soon as wordpress pods are started, you can access it from the URL `testblog.demo.wbitt.com`. Though you will notice DB connection errors, empty pages, incorrectly rendered web pages, etc. This is because you have not yet migrated the database and the web content directory of the existing website to Kubernetes. You will need to do few extra steps. (This is a migration after all!)
+As soon as wordpress pods are started, you can access it from the URL `testblog.demo.wbitt.com`. Though you will notice: DB connection errors, empty pages, incorrectly rendered web pages, etc. This is because you have not yet migrated the database and not copied the web content directory of the existing website to Kubernetes. You will need to do few extra steps. (This is a migration after all!)
 
-* Perform a database dump of the existing MySQL database of this wordpress website from the old server, and copy the file to your local work computer.
-* Load the database dump in the new database through adminer; or, through mysql command line. (Refer to `The best way to access your database instance in Kubernetes` in this article). `mysqldump db_testblog_demo_wbitt_com > db_testblog.demo.wbitt.com.dump
-; gzip -9 db_testblog.demo.wbitt.com.dump`
-* Make a tarball/zip/etc of the web content of this wordpress website, and copy it to your local work computer. Then, use `kubectl cp ...` command to copy the tarfile inside the wordpress container in `/tmp/`, and untar the files. Copy all the files from this location in `/tmp/<oldWPcontents>` to `/var/www/html/` over-writing everything. 
+* Perform a database dump of the existing MySQL database of this wordpress website from the old server, and copy the dump file to your local work computer.
+* Load the database dump in the new database through mysql command line. (Refer to `The best way to access your database instance in Kubernetes` in this article). 
+`$ mysqldump db_testblog_demo_wbitt_com > db_testblog.demo.wbitt.com.dump`
+`$ gzip -9 db_testblog.demo.wbitt.com.dump`
+* Make a tarball/zip/etc of the web content of your wordpress website, and copy it to your local work computer. Then, use `kubectl cp ...` command to copy the tarfile inside the wordpress container in `/tmp/`, and untar the files. Copy all the files from this location in `/tmp/<oldWPcontents>` to `/var/www/html/` over-writing everything. 
 * Make sure you change ownership of all files to a user which the Apache web-server in that pod run as, i.e. UID 33, GID 33, using `chown -R 33:33 /var/www/html/` 
-* Since you have overwritten the config file which was adjusted by the docker entrypoint, you will need to restart wordpress pod by simply killing it. 
+* Since you have overwritten the wordpress config file (`wp-config.php`) which was adjusted by the docker entrypoint, you will need to restart wordpress pod by simply killing it. 
 * Since both the database and other web-content files are already there, this wordpress instance should start without any problem, showing the correct blog page and showing the media/pictures attached with this blog post.
 
-**Note:** If the wordpress application was running as `https://` on the old server, then you will need to ensure that your new installation also runs on `https://` , by correctly setup Traefik in the beginning. If you don't do this, and run new installation on plain HTTP, then your wordpress website will not render correctly. It happens because wordpress stores full URLs to various objects in the database, and tries to use those URLs as it is , when it needs to show some picture, etc. When the URLs mismatch, the picture file is not read from the file-system, and nothing is shown. This problem is very difficult to troubleshoot, because the wordpress pods's logs do not show this problem.
+**Note:** If the wordpress application was running as `https://` on the old server, then you will need to ensure that your new installation also runs on `https://` , by correctly setup Traefik (with HTTPS) in the beginning. If you don't do this, and you run new installation on as plain HTTP, (or behind a plain HTTP reverse proxy), then your wordpress website will not render correctly. It happens because wordpress stores full URLs to various objects (such as pictures/images, etc) in the database, and tries to use those URLs as it is , when it needs to show those objects (pictures/images, etc). When the URLs mismatch, the picture file is not read from the file-system, and nothing is shown. This problem is very difficult to troubleshoot, because the wordpress pods's logs do not show this problem.
+
+------ 
 
 #### The best way to access your database instance in Kubernetes:
 
-Setting up a web-UI in front of your database instance, with global access/reach-ability, is a horrible idea. Anyone with enough time and resources will continue to brute-force their way into the database server, through the web-UI.
+Setting up a web-UI in front of your database instance,(Adminer/phpMyAdmin/etc), with global access/reach-ability, is a horrible idea. Anyone with enough time and resources will continue to brute-force their way into the database server, through the web-UI.
 
 The best/secure way is to port-forward database's service port to your local computer, using kubectl,  and then connecting to it through the localhost. This approach is very effective, but it expects that you have access to the kubernetes cluster, using kubectl. If that is not the case, then you do need some web interface to access your database instance. You may further secure it by setting up some firewall rules to allow access to the database instance only from selected IP addresses/ranges.
 
 Another way could be to setup a **"jumpbox"** or **bastion host**, which has access to the cluster using kubectl, and forwards certain ports from the database service all the way to the jumpbbox. Then, setup SSH accounts on the jumpbox, for anyone wishing to connect to these database (forwarded) ports. These people will not actually connect directly to the database service on the jumpbox. Instead, they will connect to the jumpbox, and forward the related port to their local computer, and **then** use/connect-to the database service through that local port.
 
-Above may seem a lot of work, but that is the secure (and recommended) way to access your database from outside the cluster.
+Another way could be to use an SSH server as a side-car inside the MySQL pod. This SSH server will allow only key-based access. The users can logon to this SSH server, and connect to the local mysql instance without a problem. Or, they can use this SSH server to forward MySQL port to their local work-computer, and use whatever MySQL client applications to talk to MySQL.
 
+Above may seem a lot of work, but these are secure ways to access your database from outside the cluster.
+
+------ 
 
 ### Setup Traefik:
 
 The first step is to setup Traefik with HTTPS enabled, using HTTP challenge. To achieve this, we use some extra files, i.e. `traefik.toml` and `dashboard-users.htpasswd`.
+
+**Note:** Keep the deployment and service objects in separate files. [To do]
 
 Remember to fix the email address in `traefik.toml` file.
 
@@ -411,7 +422,7 @@ This step is completely un-necessary for most setups. I strongly discourage expo
 
 Still, if some setup requires it, then the steps to set it up are provided below:
 
-(TBD)
+(To do)
 
 
 
@@ -443,6 +454,7 @@ Back up existing database related to this wordpress website, on the old DB serve
 
 Copy the dump-file from DB server to your local computer:
 ```
+[kamran@kworkhorse ~]$ mkdir -p tmp/docker-to-kubernetes-data
 [kamran@kworkhorse ~]$ cd tmp/docker-to-kubernetes-data/
 [kamran@kworkhorse docker-to-kubernetes-data]$ rsync root@db.witpass.co.uk:/root/db_testblog*.gz  .
 ```
@@ -838,4 +850,4 @@ It works!
 
 
 # Additional Notes:
-* To generate random passwords, I use: `openssl rand -base64 16`. I have set it up as an alias in my `~/.bashrc` as: `alias generate_random_16='openssl rand -base64 16'`
+* To generate random passwords, I use: `openssl rand -base64 18`. I have set it up as an alias in my `~/.bashrc` as: `alias generate_random_16='openssl rand -base64 18'`

@@ -1,16 +1,21 @@
 # Using CircleCI as CD (Continuous Delivery) server to deploy applications on Kubernetes:
 
-This is part 2 of the Docker to Kubernetes migration. In this part, I am going to use another example of a simple web application, which does not maintain state, but it builds it's private image every time. This example is suitable to explain the concepts of CD, especially on GCP.
+This is part 2 of the Docker to Kubernetes migration. In this part, I am going to use another example - a simple web HTML/PHP application, which does not maintain state on the disk, but it builds it's private image every time. This example is suitable to explain the concepts of Continuous Delivery, especially on GCP.
 
 **Note:** This document does not cover the CI (Continuous Integration) aspect of application development. That is a topic for later.
 
-The CD server of our choice is CircleCI. 
+The CI/CD server of our choice is CircleCI. 
 
 The repository used is:
 * https://github.com/KamranAzeem/simpleapp.demo.wbitt.com
 
+## Prerequisites:
+The following need to be installed and setup correctly on your computer, before we continue.
+* gcloud
+* kubectl
+
 ## Analysis of existing application:
-This simple web application was running as a docker-compose application on a production server. We are moving it to Kubernetes. The first step is to make sure that the DNS is updated, which means that `simpleapp.demo.wbitt.com` points to the IP address of our Traefik load balancer.
+This simple web application was running as a docker-compose application on a production server. We are moving it to Kubernetes. The first step is to make sure that the DNS is updated, which means that `simpleapp.demo.wbitt.com` points to the IP address of our Traefik load balancer in GKE.
 
 ```
 [kamran@kworkhorse docker-to-kubernetes]$ dig simpleapp.demo.wbitt.com
@@ -65,11 +70,10 @@ MYSQL_PASSWORD=zxSVgF9OC7O3bCOqsLOe4Q==
 From the docker-compose file, we have gathered the following facts:
 
 * The application runs as `simpleapp.demo.wbitt.com`. This can be handled by defining an **Ingress** object in Kubernetes.
-* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by always **creating a docker image through a CircleCI**, on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. That way before we run the application as a deployment, the container image will be available.
+* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by always **creating a docker image through a CircleCI**, on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. This way, before we run the application as a deployment, the container image will be available.
 * It mounts a (bogus) configuration file under `/config/simpleapp.conf` . This can be handled by creating a **configmap** of this configuration file. 
 * Certain files in this application uses a database connection to MySQL server. To get this to work in Kubernetes, we need to pass some ENV variables as **secret**. 
-* It connects to an external network. This network is actually the network on which Traefik is configured to serve. In Kubernetes, this is not needed. 
-
+* It connects to an external network. This network is actually the network on which Traefik is configured to serve. This is not needed in Kubernetes.
 
 
 Here is the `Dockerfile` which is used to build the image:
@@ -77,6 +81,7 @@ Here is the `Dockerfile` which is used to build the image:
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat Dockerfile 
 FROM php:7-apache
+RUN docker-php-ext-install mysqli
 COPY htdocs/ /var/www/html/
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
@@ -95,8 +100,7 @@ Below is an `index.html` file from the `htdocs` directory. This file will experi
 ``` 
 
 
-
-The biggest hurdle in such applications is to create the image. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. The work around is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended. This means, we would definitely need to involve CircleCI for this. 
+The biggest hurdle in such applications is to create the image. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. The work around is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended - as it is manual work. We need to automate this somehow, which in-turn means we need to use CircleCI. 
 
 
 ## Prepare to deploy on Kubernetes - manually:
@@ -109,14 +113,17 @@ Create a docker image and save it as a public image on docker hub.
 Build the image:
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ docker build  -t kamranazeem/simpleapp:php-7-apache-2.4 .
-Sending build context to Docker daemon  100.4kB
-Step 1/2 : FROM php:7-apache
+Sending build context to Docker daemon  161.3kB
+Step 1/3 : FROM php:7-apache
  ---> d753d5b380a1
-Step 2/2 : COPY htdocs/ /var/www/html/
+Step 2/3 : RUN docker-php-ext-install mysqli
  ---> Using cache
- ---> 056524a540f8
-Successfully built 056524a540f8
+ ---> 929cda30c0e6
+Step 3/3 : COPY htdocs/ /var/www/html/
+ ---> 21b4117f3682
+Successfully built 21b4117f3682
 Successfully tagged kamranazeem/simpleapp:php-7-apache-2.4
+
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
 
@@ -142,7 +149,7 @@ php-7-apache-2.4: digest: sha256:a5cdf1339c75106d5d1cf9d98d56230d382fac81e3241c2
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
 
-Alright, just so you know , for now our image is: `kamranazeem/simpleapp:php-7-apache-2.4` . The naming is not very practical, but I will come to that later. 
+Alright, just so you know , (for now) our image is: `kamranazeem/simpleapp:php-7-apache-2.4` . The naming is not very practical, but I will come to that later. 
 
 
 ### Create configmap:
@@ -449,7 +456,7 @@ Select "Start Building". Select "Add Manually" on next screen. Click "Start Buil
 | ----------------------------------------------------------- |
 
 
-We setup `GCLOUD_CREDENTIALS	` as environment variable . In the Project settings of this project, go to Environment variables, and add an environment variable called `GCLOUD_CREDENTIALS`. Copy the text of the `JSON` file from the text terminal and paste it in as a value for this variable.
+We setup `GCLOUD_CREDENTIALS` as environment variable . In the Project settings of this project, go to Environment variables, and add an environment variable called `GCLOUD_CREDENTIALS`. Copy the text of the `JSON` file from the text terminal and paste it in as a value for this variable.
 
 | ![images/ci_8.png](images/ci_8.png) |
 | ----------------------------------- |
@@ -466,9 +473,9 @@ We need to configure `.circleci/config.yml` to do the following:
 * create related service and ingress objects 
 
 
-The `deployment.yaml` file expects an image name and tag. But remember, we can never know the tag/hash of the image in advance. The image will always be created by circleCI as part of a pipeline-job, and therefore we can't have a fixed image tag/hah in the `deployment.yaml` file. We must use some sort of "template" file, which will have only a "place-holder" for the image tag/hash. We will replace the placeholder with the actual value of the image tag/hash while processing it through CircleCI.
+The `deployment.yaml` file expects an image name and tag. But remember, we can never know the tag/hash of the image in advance. The image will always be created by circleCI as part of a pipeline-job, and therefore we can't have a fixed image tag/hash in the `deployment.yaml` file. We must use some sort of "template" file, which will have only a "place-holder" for the image tag/hash. We will replace the placeholder with the actual value of the image tag/hash while processing it through CircleCI.
 
-To be able to deploy any objects in Kubernetes cluster, you will need to connect to it through CircleCI. So we need a connection string   - so to speak, which will create a `.kube/config` inside the CircleCI environment. We obtain that by choosing to connect to the cluster, which shows us the correct command.
+To be able to deploy any objects in Kubernetes cluster, you will need to connect to it through CircleCI. So we need a connection string - so to speak, which will create a `.kube/config` inside the CircleCI environment. We obtain that by choosing to connect to the cluster, which shows us the correct command.
 
 | ![images/ci_9.png](images/ci_9.png) |
 | ----------------------------------- |
