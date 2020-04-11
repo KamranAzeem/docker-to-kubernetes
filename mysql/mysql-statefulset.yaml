@@ -79,7 +79,6 @@ spec:
   selector:
     app: mysql
     tier: mysql
-  clusterIP: None
 
 # Note: 
 # For clusterIP:None (aka headless service), read this:
