@@ -31,7 +31,7 @@ logLevel = "INFO"
 
 [acme]
 OnHostRule = true
-email = "kamran@wbitt.com"
+email = "someone@somewhere.tld"
 storage = "/acme/acme.json"
 entryPoint = "https"
 
@@ -39,7 +39,7 @@ entryPoint = "https"
 # Uncomment the 'caServer' line to use Let's Encrypt's staging server,
 #   leave commented to goto/use prod certificates.
 #
-# caServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
+caServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
   [acme.httpChallenge]
   entryPoint = "http"
