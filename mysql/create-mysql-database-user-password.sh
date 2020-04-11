@@ -16,6 +16,16 @@ if [ -z "${DATABASE_NAME}" ]; then
   exit
 fi
 
+# Note: Not using `mysqladmin ping`, because it can cause confusion.
+#       https://stackoverflow.com/questions/18522847/mysqladmin-ping-error-code
+
+echo "Checking if MySQL server instance can be connected as user ${MYSQL_ADMIN_USER} ..."
+mysql -e "select 1;" > /dev/null
+if [ $? -ne 0 ] ; then
+  echo "User ${MYSQL_ADMIN_USER} cannot connect to MySQL instance. Aborting ..."
+  exit
+fi
+
 echo "Found DATABASE_NAME set as ${DATABASE_NAME}"
 DATABASE_NAME=$(echo ${DATABASE_NAME} | tr '.' '_')
 USER_NAME=${DATABASE_NAME}
@@ -36,10 +46,11 @@ echo "Password: ${PASSWORD}"
 # grant all on wbitt_com.* to 'wbitt_com'@'%' identified by 'randompassword';
 
 ##########################################################################
-# Below is how you setup mysql password-less login for a particular user. 
+# Below is how you setup mysql password-less login for a particular user.
+# USE AT YOUR OWN RISK!
 #
 # cat ~/.my.cnf 
 # [mysql]
-# user=dbadmin
-# password=mysql-root-password
+# user=root
+# password=super-secret-password
 ###########################################################################
