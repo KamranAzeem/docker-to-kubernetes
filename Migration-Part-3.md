@@ -1,6 +1,8 @@
-# Using CircleCI as CD (Continuous Delivery) server to deploy applications on Kubernetes:
+In the [previous article](Migration-Part-2.md), we migrated a Wordpress website to Kubernetes. In this article , I will show the process of not only migrating a PHP application to Kubernetes, but also to setup a CI/CD pipeline, so any changes made to the application code is deployed continuously.
 
-This is part 3 of the Docker to Kubernetes migration. In this part, I am going to use another example - a simple web HTML/PHP application, which does not maintain state on the disk, but it builds it's container image every time. This example is suitable to explain the concepts of Continuous Delivery, especially on GCP. 
+# Deploy applications on Kubernetes continuously using CircleCI:
+
+I will use a simple web HTML/PHP application as an example, which does not maintain state on the disk, but it builds it's container image every time. This example is suitable to explain the concepts of Continuous Delivery. 
 
 **Note:** This document does not cover the CI (Continuous Integration) aspect of application development. That is a topic for later.
 
@@ -15,22 +17,9 @@ The following need to be installed and setup correctly on your computer, before 
 * kubectl
 
 ## Analysis of existing application:
-This simple web application was running as a docker-compose application on a production server. We are moving it to Kubernetes. The first step is to make sure that the DNS is updated, which means that `simpleapp.demo.wbitt.com` points to the IP address of our Traefik load balancer in GKE.
+This simple web application is currently running as a docker-compose application on a production server. 
 
-```
-[kamran@kworkhorse docker-to-kubernetes]$ dig simpleapp.demo.wbitt.com
-
-;; QUESTION SECTION:
-;simpleapp.demo.wbitt.com.		IN	A
-
-;; ANSWER SECTION:
-simpleapp.demo.wbitt.com.	299	IN	CNAME	traefik.demo.wbitt.com.
-traefik.demo.wbitt.com.	299	IN	A	35.228.250.6
-
-[kamran@kworkhorse docker-to-kubernetes]$
-```
-
-Examine the existing `docker-compose.server.yml` file for this application:
+Here is the `docker-compose.server.yml` file for this application:
 ```
 version: "3"
 services:
@@ -57,26 +46,6 @@ networks:
     external: true
 ```
 
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat simpleapp.env 
-MYSQL_HOST=db.aws.witpass.co.uk
-MYSQL_DATABASE=simpleapp_demo_wbitt_com
-MYSQL_USER=simpleapp_demo_wbitt_com
-MYSQL_PASSWORD=zxSVgF9OC7O3bCOqsLOe4Q==
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-
-From the docker-compose file, we have gathered the following facts:
-
-* The application runs as `simpleapp.demo.wbitt.com`. This can be handled by defining an **Ingress** object in Kubernetes.
-* **The application uses environment variables in DB connection.** This is very important. There are no usernames and passwords stored with the code. If your application does that, use this example to convert it to use environment variables instead. It is very easy!
-* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by always **creating a docker image through a CircleCI**, on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. This way, before we run the application as a deployment, the container image will be available.
-* It mounts a (bogus) configuration file under `/config/simpleapp.conf` . This can be handled by creating a **configmap** of this configuration file. 
-* Certain files in this application uses a database connection to MySQL server. To get this to work in Kubernetes, we need to pass some ENV variables as **secret**. 
-* It connects to an external network. This network is actually the network on which Traefik is configured to serve. This is not needed in Kubernetes.
-
-
 Here is the `Dockerfile` which is used to build the image:
 
 ```
@@ -86,6 +55,27 @@ RUN docker-php-ext-install mysqli
 COPY htdocs/ /var/www/html/
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
+
+Here are the secrets:
+```
+[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat simpleapp.env 
+MYSQL_HOST=db.aws.witpass.co.uk
+MYSQL_DATABASE=simpleapp_demo_wbitt_com
+MYSQL_USER=simpleapp_demo_wbitt_com
+MYSQL_PASSWORD=zxSVgF9OC7O3bCOqsLOe4Q==
+[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
+```
+
+#### The simple PHP application and it's needs:
+From the docker-compose file, we have gathered the following facts:
+
+* The application runs as `simpleapp.demo.wbitt.com`. This can be handled by defining an **Ingress** object in Kubernetes.
+* **The application uses environment variables in DB connection.** This is very important. There are no usernames and passwords stored with the code. If your application does that, use this example to convert it to use environment variables instead. It is very easy!
+* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by always **creating a docker image through a CircleCI**, on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. This way, before we run the application as a deployment, the container image will be available.
+* It mounts a (bogus) configuration file under `/config/simpleapp.conf` . This can be handled by creating a **configmap** of this configuration file. 
+* Certain files in this application uses a database connection to MySQL server. To get this to work in Kubernetes, we need to pass some ENV variables as **secret**. 
+* It connects to an external network. This network is actually the network on which Traefik is configured to serve. This is not needed in Kubernetes.
+
 
 Below is an `index.html` file from the `htdocs` directory. This file will experience constant changes during this exercise, resulting in a need to re-create the related docker image on each commit. I will simply append a new line of bogus text in this file to represent change in the repository , or "change in application", so to speak.
 
@@ -101,12 +91,165 @@ Below is an `index.html` file from the `htdocs` directory. This file will experi
 ``` 
 
 
-The biggest hurdle in such applications is to create the image. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. The work around is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended - as it is manual work. We need to automate this somehow, which in-turn means we need to use CircleCI. 
+The biggest hurdle in such applications is to create the image - automatically. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. The work around is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended - as it is manual work. We need to automate this somehow, which in-turn means we need to use a CI/CD tool. 
+
+## Migration plan:
+To be able to deploy our simple PHP  application to kubernetes, we would need to perform the following steps, in order:
+
+**Note:** It is VERY important that you set TTL for the DNS zone of the related domain to a low value, say "5 minutes". This will ensure that when you change DNS records, the change is propagated quickly across DNS servers around the world.
+
+
+* Stop the related simple PHP docker-compose application on the docker server. 
+* Open DNS zone file in a separate browser tab, and set `simpleapp.demo.wbitt.com` as CNAME for `traefik.demo.wbitt.com`. This will help propagate DNS changes, while we work on the actual migration.
+* Perform a database dump of the existing MySQL database of this PHP application from the old server.
+* Copy the dump file from old db server to your local work computer.
+* Create a database, user and password in the MySQL instance (running inside kubernetes cluster) for the simple-PHP application - through command line (using forwarded port).
+* Load the database dump in the new database through mysql command line. 
+* Create the secrets for connecting the simple-PHP Deployment to the MySQL instance, and make sure that the PHP application deployment is configured to uses those secrets.
+* Deploy the PHP application as kubernetes deployment, service and ingress. 
+* Since the database is already setup, this PHP application instance should start without any problem, showing the correct web-content.
 
 
 ## Prepare to deploy on Kubernetes - manually:
 
-To test things first, I will show you the manual way of creating this deployment. For this I will "risk" creating a public docker image. "Risk" because in our hypothesis, this application is sensitive in nature, and it's image cannot exist on public internet. Anyhow, for ease of understanding, lets create the image and store it as a public docker image. This is just an example - right!
+To test things first, I will show you the manual way of creating this deployment. For this I will create a public docker container image in docker hub. 
+
+### Shutdown the PHP application on the old serer:
+
+```
+[kamran@kworkhorse ~]$ ssh witpass@web.witpass.co.uk 
+
+[witpass@web simple.demo.wbitt.com]$ docker-compose -f docker-compose.server.yml stop
+Stopping simpledemowbittcom_simpleapp.demo.wbitt.com_1 ... done
+
+
+[witpass@web simple.demo.wbitt.com]$ docker-compose -f docker-compose.server.yml rm -f
+Going to remove simpledemowbittcom_simpleapp.demo.wbitt.com_1
+Removing simpledemowbittcom_simpleapp.demo.wbitt.com_1 ... done
+[witpass@web simple.demo.wbitt.com]$
+```
+
+### Update DNS setting in DNS zone:
+Update DNS setting in DNS zone file for the `demo.wbitt.com` zone, and verify with the following command:
+
+```
+[kamran@kworkhorse ~]$ dig simpleapp.demo.wbitt.com
+
+;; QUESTION SECTION:
+;simpleapp.demo.wbitt.com.		IN	A
+
+;; ANSWER SECTION:
+simpleapp.demo.wbitt.com.	299	IN	CNAME	traefik.demo.wbitt.com.
+traefik.demo.wbitt.com.	299	IN	A	35.228.250.6
+
+[kamran@kworkhorse ~]$
+```
+
+### Backup existing database:
+Back up existing database related to this PHP website, on the old DB server:
+
+```
+[kamran@kworkhorse tmp]$ ssh root@db.witpass.co.uk
+
+[root@db ~]# mysqldump simpleapp_demo_wbitt_com > /tmp/db_simpleapp_demo_wbitt_com.dump 
+```
+
+Copy the dump-file from DB server to your local computer:
+
+```
+[kamran@kworkhorse tmp]$ pwd
+/tmp
+[kamran@kworkhorse tmp]$ scp root@db.witpass.co.uk:/tmp/db_simpleapp_demo_wbitt_com.dump  .
+db_simpleapp_demo_wbitt_com.dump                                                                      100% 1943    60.4KB/s   00:00    
+[kamran@kworkhorse tmp]$
+```
+### Restore the database to MySQL instance in Kubernetes:
+
+Forward the MySQL port from the Kubernetes cluster to your local computer, using kubectl. Do this in a separate shell/terminal. Before doing that, ensure that you are not running a local MySQL instance, because we need port 3306 on local computer to be available. 
+
+```
+[kamran@kworkhorse mysql]$ kubectl get services
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+kubernetes   ClusterIP   10.0.0.1     <none>        443/TCP    3h22m
+mysql        ClusterIP   None         <none>        3306/TCP   11m
+```
+
+Run the following command in a separate terminal window and leave it running.
+```
+[kamran@kworkhorse mysql]$ kubectl port-forward svc/mysql 3306:3306 
+Forwarding from 127.0.0.1:3306 -> 3306
+Forwarding from [::1]:3306 -> 3306
+
+(waits forever)
+```
+
+Open a new terminal. Make sure you are in the same directory where you copied the dump file from the old DB server. Unzip the dump file if necessary.
+
+Connect to this port (3306) on local computer, using `mysql` command, and create a MySQL database for your database, a user and a password for this user. 
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1  -u root -p 
+
+MySQL [(none)]> create database simpleapp_demo_wbitt_com;
+Query OK, 1 row affected (0.029 sec)
+
+MySQL [(none)]> grant all on simpleapp_demo_wbitt_com.* to 'simpleapp_demo_wbitt_com'@'%' identified by 'n0xkFhsIdb2aNrs/fP3y8jxa';
+Query OK, 0 rows affected, 1 warning (0.030 sec)
+
+MySQL [(none)]> flush privileges;
+Query OK, 0 rows affected (0.042 sec)
+
+MySQL [(none)]> quit
+Bye
+[kamran@kworkhorse tmp]$
+```
+
+Now exit the mysql session, and reconnect using these new credentials, to make sure that it works:
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u simpleapp_demo_wbitt_com -p
+Enter password: 
+
+MySQL [(none)]> use simpleapp_demo_wbitt_com;
+Database changed
+MySQL [simpleapp_demo_wbitt_com]> show tables;
+Empty set (0.027 sec)
+
+MySQL [simpleapp_demo_wbitt_com]> exit
+Bye
+[kamran@kworkhorse tmp]$
+```
+
+Very good. Now load the DB dump you obtained from the old DB server, into this database:
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u simpleapp_demo_wbitt_com -D simpleapp_demo_wbitt_com  -p < /tmp/db_simpleapp_demo_wbitt_com.dump 
+Enter password: 
+[kamran@kworkhorse tmp]$
+```
+
+Reconnect and verify that the database has been restored successfully:
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u simpleapp_demo_wbitt_com -p
+Enter password: 
+
+MySQL [(none)]> use simpleapp_demo_wbitt_com;
+
+Database changed
+MySQL [simpleapp_demo_wbitt_com]> show tables;
++------------------------------------+
+| Tables_in_simpleapp_demo_wbitt_com |
++------------------------------------+
+| students                           |
++------------------------------------+
+1 row in set (0.123 sec)
+
+MySQL [simpleapp_demo_wbitt_com]> exit
+Bye
+[kamran@kworkhorse tmp]$
+```
+Database is restored on the new DB instance in Kubernetes. You can terminate the kubectl session running in the other terminal, being used to forward port 3306 to local computer.
 
 ### Create docker image for SimpleApp:
 Create a docker image and save it as a public image on docker hub. 
@@ -211,9 +354,9 @@ simpleapp-credentials   Opaque                                4      24h
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
 
-### Deploy the application:
+### Setup the PHP application's deployment:
 
-Here is the deployment.yaml file for the same simpleapp, now in Kubernetes format - with some additional features.
+Here is the `deployment.yaml` file for the same simpleapp, now in Kubernetes format - with some additional features.
 
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat deployment.yaml
@@ -320,11 +463,8 @@ spec:
 [kamran@kworkhorse docker-to-kubernetes]$ 
 ```
 
-At this point, backup and restore the application's database from existing DB server to MySQL instance in kubernetes.Also fix DNS , so `simpleapp.demo.wbitt.com` now points to the IP address of reverse proxy in the Kubernetes cluster.
 
-
-
-Deploy the application:
+#### Deploy the application:
 
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl apply -f deployment.yaml
@@ -339,7 +479,7 @@ testblog-54f855f697-5qdmz               1/1     Running   0          24h
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
 
-Setup service and ingress:
+#### Setup service and ingress:
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl apply -f service-ingress.yaml 
 service/simpleapp created
@@ -470,7 +610,7 @@ We setup `GCLOUD_CREDENTIALS` as environment variable . In the Project settings 
 | ----------------------------------- |
 
 
-We need to configure `.circleci/config.yml` to do the following:
+We need to configure `.circleci/config.yml` to do the following steps:
 * create and push a container image to GCR
 * create necessary configmap
 * create necessary secret
@@ -511,7 +651,7 @@ Create CircleCI environment variables for our fictional configuration file and t
 | ----------------------------------- |
 
 
-Update `.circleci/config.yml` to use these environment variables as needed. Then, push this updated `.circleci/config.yml` to the repository. CircleCI will see the change and will start processing it. You will notice a "workflow" showing up in CircleCI web interface.
+Update the `.circleci/config.yml` file to use these environment variables as needed. Then, push this updated `.circleci/config.yml` to the repository. CircleCI will see the change and will start processing it. You will notice a "workflow" showing up in CircleCI web interface.
 
 
 At this point, CircleCI will perform all the steps configured in it's `config.yml` file. Configmap will be (re)created, Secret will be (re)created, application will be deployed as a Deployment, and related Service and Ingress objects will be created.
@@ -669,5 +809,5 @@ So, **It works!**
 
 There you have it, your application being deployed continuously using CircleCI.
 
-(End of Part 2.)
+(End of Part 3.)
 

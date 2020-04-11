@@ -1,5 +1,10 @@
 In the [previous article](Migration-Part-1.md), we setup MySQL and Traefik reverse proxy inside our Kubernetes cluster. In this article, we migrate our first Wordpress based website to this new Kubernetes cluster.
 
+## Prerequisites:
+The following need to be installed and setup correctly on your computer, before we continue.
+* gcloud
+* kubectl
+
 ## Two sample applications running on my servers:
 I have two simple applications running on my current server(s), which I will use to explain various concepts.
 
@@ -224,13 +229,7 @@ Connect to this port (3306) on local computer, using `mysql` command, and create
 ```
 [kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u root -p
 Enter password: 
-Welcome to the MariaDB monitor.  Commands end with ; or \g.
-Your MySQL connection id is 6
-Server version: 5.7.29 MySQL Community Server (GPL)
 
-Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
-
-Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
 MySQL [(none)]> create database testblog_demo_wbitt_com ;
 Query OK, 1 row affected (0.061 sec)
