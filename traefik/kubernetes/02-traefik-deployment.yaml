@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik-ingress-controller
+  namespace: kube-system
+
+---
+
+# This PVC will be used by Traefik to hold SSL certificats in acme.json file, obtained from LetsEncrypt
+#
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: kube-system
+  name: pvc-traefik-acme-json
+  labels:
+    name: pvc-traefik-acme-json
+spec:
+  storageClassName: "standard"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: traefik-ingress-controller
+  namespace: kube-system
+  labels:
+    k8s-app: traefik-ingress-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: traefik-ingress-controller
+  template:
+    metadata:
+      labels:
+        k8s-app: traefik-ingress-controller
+        name: traefik-ingress-controller
+    spec:
+      serviceAccountName: traefik-ingress-controller
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: vol-traefik-toml-file
+        configMap:
+          # Configmap needs to be created manually from the traefik.toml file.
+          # $ kubectl  --namespace=kube-system  \
+          #     create configmap configmap-traefik-toml --from-file=traefik.toml 
+          name: configmap-traefik-toml
+      - name: vol-acme-json-file
+        persistentVolumeClaim:
+          # The definition of this pvc should be in this (same) deployment file, at the top.
+          claimName: pvc-traefik-acme-json
+      - name: vol-dashboard-users-file
+        secret:
+          # secret should be created manually from the dashboard-users.htpasswd file
+          # $ htpasswd -c -b dashboard-users.htpasswd admin 50m3-53cr3t-P@55w0rd
+          # $ kubectl  --namespace=kube-system  \
+          #     create secret generic secret-traefik-dashboard-users --from-file=dashboard-users.htpasswd
+          secretName: secret-traefik-dashboard-users
+      containers:
+      - image: traefik:1.7
+        name: traefik-ingress-controller
+        ports:
+        - name: http
+          containerPort: 80
+        - name: https
+          containerPort: 443
+        - name: webui
+          containerPort: 8080
+        volumeMounts:
+        - mountPath: "/etc/traefik/"
+          name: vol-traefik-toml-file
+        - mountPath: "/acme/"
+          name: vol-acme-json-file
+        - mountPath: "/secrets/"
+          name: vol-dashboard-users-file
+
