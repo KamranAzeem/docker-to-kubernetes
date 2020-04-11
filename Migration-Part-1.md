@@ -4,7 +4,7 @@ This series of articles talks about the ways to move your applications running o
 
 Moving your applications to Kubernetes is not straight-forward. (Developing your apps for Kubernetes is not straight-forward either). **State is hard**. Kubernetes has a lot of moving parts. Many of the concepts are new. In short, there are many potential pitfalls. You really need to have a clear understanding of how your current application works. You also need to understand how Kubernetes works. It is going to be bit painful, feel complex; but it will reward you in spades. Trust me! :)
 
-I hope that with this series of articles (and the related videos), I would be able to help my development team to understand how applications are deployed (differently) in Kubernetes, providing them with necessary skills to migrate their applications from docker-compose to Kubernetes. I also want to help anyone out there in the world , who is in the similar situation. I hope this work proves useful!
+I hope that with this series of articles (and the related videos), I would be able to help my fellow development team to understand how applications are deployed (differently) in Kubernetes, providing them with necessary skills to migrate their applications from docker-compose to Kubernetes. I also want to help anyone out there in the world , who is in the similar situation. I hope this work proves useful!
 
 
 There are two very important things to remember before we start on this journey:
