@@ -1,53 +1,33 @@
-# Using CircleCI as CD (Continuous Delivery) server to deploy applications on Kubernetes:
+In the [previous article](Migration-Part-1.md), we setup MySQL and Traefik reverse proxy inside our Kubernetes cluster. In this article, we migrate our first Wordpress based website to this new Kubernetes cluster.
 
-This is part 2 of the Docker to Kubernetes migration. In this part, I am going to use another example - a simple web HTML/PHP application, which does not maintain state on the disk, but it builds it's private image every time. This example is suitable to explain the concepts of Continuous Delivery, especially on GCP.
+## Two sample applications running on my servers:
+I have two simple applications running on my current server(s), which I will use to explain various concepts.
 
-**Note:** This document does not cover the CI (Continuous Integration) aspect of application development. That is a topic for later.
+* A simple WordPress website [https://github.com/KamranAzeem/testblog.demo.wbitt.com](https://github.com/KamranAzeem/testblog.demo.wbitt.com)
+* A simple HTML/PHP website [https://github.com/KamranAzeem/simple.demo.wbitt.com](https://github.com/KamranAzeem/simple.demo.wbitt.com)
 
-The CI/CD server of our choice is CircleCI. 
 
-The repository used is:
-* https://github.com/KamranAzeem/simpleapp.demo.wbitt.com
+### The Wordpress website:
 
-## Prerequisites:
-The following need to be installed and setup correctly on your computer, before we continue.
-* gcloud
-* kubectl
-
-## Analysis of existing application:
-This simple web application was running as a docker-compose application on a production server. We are moving it to Kubernetes. The first step is to make sure that the DNS is updated, which means that `simpleapp.demo.wbitt.com` points to the IP address of our Traefik load balancer in GKE.
+Here is the `docker-compose.server.yml` file for my (test) blog website:
 
 ```
-[kamran@kworkhorse docker-to-kubernetes]$ dig simpleapp.demo.wbitt.com
+$ cat docker-compose.server.yml 
 
-;; QUESTION SECTION:
-;simpleapp.demo.wbitt.com.		IN	A
-
-;; ANSWER SECTION:
-simpleapp.demo.wbitt.com.	299	IN	CNAME	traefik.demo.wbitt.com.
-traefik.demo.wbitt.com.	299	IN	A	35.228.250.6
-
-[kamran@kworkhorse docker-to-kubernetes]$
-```
-
-Examine the existing `docker-compose.server.yml` file for this application:
-```
 version: "3"
 services:
-  simpleapp.demo.wbitt.com:
-
-    build: .
-
+  testblog.demo.wbitt.com:
+    image:  wordpress:latest
     labels:
       - traefik.enable=true
       - traefik.port=80
-      - traefik.frontend.rule=Host:simpleapp.demo.wbitt.com
-
-    volumes:
-      - ${PWD}/simpleapp.conf:/config/simpleapp.conf
+      - traefik.frontend.rule=Host:testblog.demo.wbitt.com
 
     env_file:
-    - simpleapp.env
+      - testblog.env
+
+    volumes:
+      - /home/containers-data/testblog.demo.wbitt.com:/var/www/html
 
     networks:
       - services-network
@@ -57,616 +37,545 @@ networks:
     external: true
 ```
 
+Here are the secrets I am passing to this container:
 ```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat simpleapp.env 
-MYSQL_HOST=db.aws.witpass.co.uk
-MYSQL_DATABASE=simpleapp_demo_wbitt_com
-MYSQL_USER=simpleapp_demo_wbitt_com
-MYSQL_PASSWORD=zxSVgF9OC7O3bCOqsLOe4Q==
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
+$ cat testblog.env
 
-
-From the docker-compose file, we have gathered the following facts:
-
-* The application runs as `simpleapp.demo.wbitt.com`. This can be handled by defining an **Ingress** object in Kubernetes.
-* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by always **creating a docker image through a CircleCI**, on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. This way, before we run the application as a deployment, the container image will be available.
-* It mounts a (bogus) configuration file under `/config/simpleapp.conf` . This can be handled by creating a **configmap** of this configuration file. 
-* Certain files in this application uses a database connection to MySQL server. To get this to work in Kubernetes, we need to pass some ENV variables as **secret**. 
-* It connects to an external network. This network is actually the network on which Traefik is configured to serve. This is not needed in Kubernetes.
-
-
-Here is the `Dockerfile` which is used to build the image:
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat Dockerfile 
-FROM php:7-apache
-RUN docker-php-ext-install mysqli
-COPY htdocs/ /var/www/html/
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-Below is an `index.html` file from the `htdocs` directory. This file will experience constant changes during this exercise, resulting in a need to re-create the related docker image on each commit. I will simply append a new line of bogus text in this file to represent change in the repository , or "change in application", so to speak.
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat htdocs/index.html 
-<h1>Simple website - This is index.html!</h1>
-<hr>
-<a href=index.php>index.php</a><br>
-<a href=phpinfo.php>phpinfo.php</a><br>
-<a href=createfile.php>createfile.php</a><br>
-<a href=dbconnection.php>dbconnection.php</a><br>
-<hr>
-``` 
-
-
-The biggest hurdle in such applications is to create the image. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. The work around is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended - as it is manual work. We need to automate this somehow, which in-turn means we need to use CircleCI. 
-
-
-## Prepare to deploy on Kubernetes - manually:
-
-To test things first, I will show you the manual way of creating this deployment. For this I will "risk" creating a public docker image. "Risk" because in our hypothesis, this application is sensitive in nature, and it's image cannot exist on public internet. Anyhow, for ease of understanding, lets create the image and store it as a public docker image. This is just an example - right!
-
-### Create docker image for SimpleApp:
-Create a docker image and save it as a public image on docker hub. 
-
-Build the image:
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ docker build  -t kamranazeem/simpleapp:php-7-apache-2.4 .
-Sending build context to Docker daemon  161.3kB
-Step 1/3 : FROM php:7-apache
- ---> d753d5b380a1
-Step 2/3 : RUN docker-php-ext-install mysqli
- ---> Using cache
- ---> 929cda30c0e6
-Step 3/3 : COPY htdocs/ /var/www/html/
- ---> 21b4117f3682
-Successfully built 21b4117f3682
-Successfully tagged kamranazeem/simpleapp:php-7-apache-2.4
-
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-Push to docker hub:
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ docker push kamranazeem/simpleapp:php-7-apache-2.4
-The push refers to repository [docker.io/kamranazeem/simpleapp]
-f0f442497cc4: Pushed 
-a616f8ab5356: Mounted from kamranazeem/php 
-079d43545924: Mounted from kamranazeem/php 
-d97484483f49: Mounted from kamranazeem/php 
-b242745ebda2: Mounted from kamranazeem/php 
-d0d3b2f87351: Mounted from kamranazeem/php 
-be73e3c8f219: Mounted from kamranazeem/php 
-0fc284fc9cf5: Mounted from kamranazeem/php 
-732057c800a3: Mounted from kamranazeem/php 
-4cc11613548d: Mounted from kamranazeem/php 
-df6c050501b6: Mounted from kamranazeem/php 
-b4bfb20b5f05: Mounted from kamranazeem/php 
-2e8cc9f5313f: Mounted from kamranazeem/php 
-f2cb0ecef392: Mounted from kamranazeem/php 
-php-7-apache-2.4: digest: sha256:a5cdf1339c75106d5d1cf9d98d56230d382fac81e3241c245fceae156b77f826 size: 3243
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-Alright, just so you know , (for now) our image is: `kamranazeem/simpleapp:php-7-apache-2.4` . The naming is not very practical, but I will come to that later. 
-
-
-### Create configmap:
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat simpleapp.conf 
-dir=/home
-user=someone
-demo=true
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ ./create-simpleapp-configmap.sh 
-First, deleting the old configmap: configmap-simpleapp-conf
-Error from server (NotFound): configmaps "configmap-simpleapp-conf" not found
-
-Creating the new configmap: configmap-simpleapp-conf
-configmap/configmap-simpleapp-conf created
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-### Create secret:
-We know that the name of mysql service in our kubernetes cluster is `mysql`, so we need to adjust the `simpleapp.env` file before we create a secret for it:
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat simpleapp.env 
-MYSQL_HOST=mysql
-MYSQL_DATABASE=simpleapp_demo_wbitt_com
-MYSQL_USER=simpleapp_demo_wbitt_com
-MYSQL_PASSWORD=zxSVgF9OC7O3bCOqsLOe4Q==
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-Create the secret:
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ ./create-simpleapp-credentials.sh 
-First, deleting the old secret: simpleapp-credentials
-Error from server (NotFound): secrets "simpleapp-credentials" not found
-Found simpleapp.env file, creating kubernetes secret: simpleapp-credentials
-secret/simpleapp-credentials created
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-Verify:
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get configmap
-NAME                       DATA   AGE
-configmap-simpleapp-conf   1      94s
-
-
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get secret
-NAME                    TYPE                                  DATA   AGE
-default-token-5hdzn     kubernetes.io/service-account-token   3      29h
-mysql-credentials       Opaque                                1      26h
-simpleapp-credentials   Opaque                                4      41s
-simpleapp-credentials   Opaque                                4      24h
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-### Deploy the application:
-
-Here is the deployment.yaml file for the same simpleapp, now in Kubernetes format - with some additional features.
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: simpleapp
-  labels:
-    app: simpleapp
-spec:
-  selector:
-    matchLabels:
-      app: simpleapp
-      tier: frontend
-  template:
-    metadata:
-      labels:
-        app: simpleapp
-        tier: frontend
-    spec:
-      containers:
-      - name: simpleapp
-        image: kamranazeem/simpleapp:php-7-apache-2.4
-        env:
-        - name: MYSQL_HOST
-          valueFrom:
-            secretKeyRef:
-              name: simpleapp-credentials
-              key: MYSQL_HOST
-        - name: MYSQL_DATABASE
-          valueFrom:
-            secretKeyRef:
-              name: simpleapp-credentials
-              key: MYSQL_DATABASE
-        - name: MYSQL_USER
-          valueFrom:
-            secretKeyRef:
-              name: simpleapp-credentials
-              key: MYSQL_USER
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: simpleapp-credentials
-              key: MYSQL_PASSWORD
-
-        ports:
-        - containerPort: 80
-
-        resources:
-          limits:
-            cpu: 10m
-            memory: 20Mi
-          requests:
-            cpu: 5m
-            memory: 10Mi
-
-        volumeMounts:
-        - mountPath: "/config/"
-          name: vol-simpleapp-conf
-
-      volumes:
-      - name: vol-simpleapp-conf
-        configMap:
-          name: configmap-simpleapp-conf
-
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-We also need a service and ingress for this deployment. This is a separate file, as we don't expect service and ingress definition to change constantly. Though this can be part of the main `deployment.yaml` file without any harm.
-
-```
-[kamran@kworkhorse docker-to-kubernetes]$ cat simpleapp-service-ingress.yaml 
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: simpleapp
-  labels:
-    app: simpleapp
-spec:
-  ports:
-    - port: 80
-  selector:
-    app: simpleapp
-    tier: frontend
-  type: ClusterIP
-
----
-
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: simpleapp
-spec:
-  rules:
-  - host: simpleapp.demo.wbitt.com
-    http:
-      paths:
-      - path: /
-        backend:
-          serviceName: simpleapp
-          servicePort: 80
-
-[kamran@kworkhorse docker-to-kubernetes]$ 
-```
-
-At this point, backup and restore the application's database from existing DB server to MySQL instance in kubernetes.Also fix DNS , so `simpleapp.demo.wbitt.com` now points to the IP address of reverse proxy in the Kubernetes cluster.
-
-
-
-Deploy the application:
-
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl apply -f deployment.yaml
-deployment.apps/simpleapp-deployment created
-
-
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get pods
-NAME                                    READY   STATUS    RESTARTS   AGE
-mysql-0                                 1/1     Running   0          26h
-simpleapp-deployment-5d7dc79f7c-ctqx8   1/1     Running   0          71s
-testblog-54f855f697-5qdmz               1/1     Running   0          24h
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
-
-Setup service and ingress:
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl apply -f service-ingress.yaml 
-service/simpleapp created
-ingress.extensions/simpleapp created
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
+WORDPRESS_DB_HOST=db.aws.witpass.co.uk
+WORDPRESS_DB_NAME=db_testblog_demo_wbitt_com
+WORDPRESS_DB_USER=user_testblog_demo_wbitt_com
+WORDPRESS_DB_PASSWORD=+GmNr+EYYT3LdHb/lYO5/w==
+WORDPRESS_TABLE_PREFIX=wp_
+APACHE_RUN_USER=#1001
+APACHE_RUN_GROUP=#1001
 ```
 
 
-Verify:
-```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get deployments
-NAME        READY   UP-TO-DATE   AVAILABLE   AGE
-simpleapp   1/1     1            1           81s
-testblog    1/1     1            1           25h
+Based on the information we see in the docker-compose file above, the WordPress website has the following properties:
 
+* Site name: `testblog.demo.wbitt.com` , which points to the IP address of `web.witpass.co.uk` where all our wordpress based websites are running as docker containers.
+* This website used an existing/official Wordpress docker image: `wordpress:latest`
+* The `testblog.env` file is used to provide secrets (DB access details) to the WordPress image at run time.
+* Site's **DB state** is saved in a database created manually in the database server: `db.aws.witpass.co.uk`
+* Site's **File/disk state** is saved under a directory: `/home/containers-data/testblog.demo.wbitt.com/`. This is where all the wordpress software, uploads, and plugins, etc, are saved.
 
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get services
-NAME         TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)    AGE
-kubernetes   ClusterIP   10.0.0.1      <none>        443/TCP    29h
-mysql        ClusterIP   None          <none>        3306/TCP   26h
-simpleapp    ClusterIP   10.0.14.240   <none>        80/TCP     58s
-testblog     ClusterIP   10.0.14.118   <none>        80/TCP     25h
+**Note:** I personally dislike the idea of storing "entire" wordpress installation as a **state**, and that is why I created a custom wordpress image, which only saves the state of `uploads`, and nothing else. This is a separate topic. The improved version of the wordpress image I just mentioned is here: [https://github.com/WITPASS/witpass-wordpress-docker-image](https://github.com/WITPASS/witpass-wordpress-docker-image)
 
+| ![images/testblog.png](images/testblog.png) |
+| ------------------------------------------- |
 
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get endpoints
-NAME         ENDPOINTS           AGE
-kubernetes   35.228.53.139:443   29h
-mysql        10.32.0.14:3306     26h
-simpleapp    10.32.0.20:80       66s
-testblog     10.32.0.17:80       25h
 
+#### The WordPress application , and it's needs:
+* It needs to be a **"Deployment"** , so we can scale up (and down) the number of replicas, depending on the load, which still able to serve the files on the (shared) disk from all the instances. This is only possible when you use a Deployment object, and not StatefulSet object.
+* The Deployment will need an image. In this case, it uses a publicly available docker container image, so that is not a problem.
+* The Deployment will need to know the location of MySQL database server, the DB for this wordpress installation , the DB username and passwords to connect to that database. This information cannot be part of the repository, so it is provided manually on the docker servers as `wordpress.env` file (as an example). On Kubernetes this information needs to be provided as environment variables. The question is, how? There are two ways. One, we create the secret manually from command line. The other way way is to setup the secrets as environment variables in the CI server. In a later article, we will be using CircleCI for our CI/CD needs. 
+* The Deployment will also need a persistent storage for storing various files this wordpress software will create. The same location will also hold any content uploaded by the user, for example pictures, etc. This will be a PVC, and will be created separately. It's definition of creation will not be part of the same file as the `deployment.yaml` . This is to prevent any accidents of old PVCs being deleted and new ones being created automatically resulting in data loss. This problem has been explain in another article of mine: [https://github.com/KamranAzeem/kubernetes-katas/blob/master/08-storage-basic-dynamic-provisioning.md](https://github.com/KamranAzeem/kubernetes-katas/blob/master/08-storage-basic-dynamic-provisioning.md) . Anyhow, the developer will be required to create the necessary PV/PVC once, and then make sure to **never delete the PVC**. Till the time the PVC is there, the data will be safe. 
 
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get ingress
-NAME        HOSTS                      ADDRESS   PORTS   AGE
-simpleapp   simpleapp.demo.wbitt.com             80      70s
-testblog    testblog.demo.wbitt.com              80      25h
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
-```
+**Note:** This example uses with wordpress, which is quite "stateful". What we want, from the developers is: **applications as stateless as possible**. i.e. There should be no involvement of saving any state, eliminating a need to acquire and maintain PVCs and PVs. **This is very important in application design.** 
 
-Here are some screenshots:
+## Migration plan:
+To be able to deploy our wordpress application to kubernetes, we would need to perform the following steps, in order:
 
-| ![images/traefik-with-simpleapp.png](images/traefik-with-simpleapp.png) |
-| --------------------------------------------------------- |
+**Note:** It is VERY important that you set TTL for the DNS zone of the related domain to a low value, say "5 minutes". This will ensure that when you change DNS records, the change is propagated quickly across DNS servers around the world.
 
 
-| ![images/simpleapp-main-page.png](images/simpleapp-main-page.png) |
-| ----------------------------------------------------------------- |
+* Stop the related wordpress docker-compose application on the docker server. 
+* Open DNS zone file in a separate browser tab, and set `testblog.demo.wbitt.com` as CNAME for `traefik.demo.wbitt.com`. This will help propagate DNS changes, while we work on the actual migration.
+* Perform a database dump of the existing MySQL database of this wordpress website from the old server.
+* Copy the dump file from old db server to your local work computer.
+* Create a database, user and password in the MySQL instance (running inside kubernetes cluster) for the wordpress application/site - through command line (using forwarded port).
+* Load the database dump in the new database through mysql command line. 
+* Make a tarball/zip/etc of the web content of your wordpress website from the old server, and copy it to your local work computer. 
+* Create a PV and PVC for the wordpress deployment.
+* Create the secrets for connecting the wordpress Deployment to the MySQL instance, and make sure that the wordpress deployment is configured to uses those secrets.
+* Deploy the wordpress deployment, service and ingress. 
+* Use `kubectl cp ...` command to copy the tarfile inside the wordpress container in `/tmp/`, and untar the files. Copy all the files from this location in `/tmp/<oldWPcontents>` to `/var/www/html/` over-writing everything. 
+* Make sure you change ownership of all files to a user which the Apache web-server in that pod run as, i.e. UID 33, GID 33, using `chown -R 33:33 /var/www/html/` 
+* Since you have overwritten the wordpress config file (`wp-config.php`) which was adjusted by the docker entrypoint, you will need to restart wordpress pod by simply killing it. 
+* Since both the database and other web-content files are already there, this wordpress instance should start without any problem, showing the correct blog page and showing the media/pictures attached with this blog post.
 
+**Note:** After the wordpress pod is started, you will be able to access it from the URL `testblog.demo.wbitt.com`. If you notice errors like: DB connection errors, empty pages, incorrectly rendered web pages, etc. This is because you have not yet migrated the database and not copied the web content directory of the existing website to the wordpress pod inside Kubernetes. 
 
-| ![images/simpleapp-php-dbconnection.png](images/simpleapp-php-dbconnection.png) |
-| ------------------------------------------------------------------------------- |
 
+**Note:** If the wordpress application was running as `https://` on the old server, then you will need to ensure that your new installation also runs on `https://` by correctly setup Traefik (with HTTPS) in the beginning. If you don't do this, and you run new installation on as plain HTTP, (or behind a plain HTTP reverse proxy), then your wordpress website will not render correctly. It happens because wordpress stores full URLs to various objects (such as pictures/images, etc) in the database, and tries to use those URLs as it is , when it needs to show those objects (pictures/images, etc). When the URLs mismatch, the picture file is not read from the file-system, and nothing is shown. This problem is very difficult to troubleshoot, because the wordpress pods's logs do not show this problem.
 
-**It works!**
+------ 
 
-------
+#### The best way to access your database instance in Kubernetes:
 
+Setting up a web-UI in front of your database instance,(Adminer/phpMyAdmin/etc), with global access/reach-ability, is a horrible idea. Anyone with enough time and resources will continue to brute-force their way into the database server, through the web-UI.
 
-## Prepare to deploy on Kubernetes - through CircleCI:
+The best/secure way is to port-forward database's service port to your local computer, using kubectl,  and then connecting to it through the localhost. This approach is very effective, but it expects that you have access to the kubernetes cluster, using kubectl. If that is not the case, then you do need some web interface to access your database instance. You may further secure it by setting up some firewall rules to allow access to the database instance only from selected IP addresses/ranges.
 
-### Add service account under IAM & Admin - for GCR and GKE access:
+Another way could be to setup a **"jumpbox"** or **bastion host**, which has access to the cluster using kubectl, and forwards certain ports from the database service all the way to the jumpbbox. Then, setup SSH accounts on the jumpbox, for anyone wishing to connect to these database (forwarded) ports. These people will not actually connect directly to the database service on the jumpbox. Instead, they will connect to the jumpbox, and forward the related port to their local computer, and **then** use/connect-to the database service through that local port.
 
-Create a new service account named "circleci-access" under "IAM & Admin"
+Another way could be to use an SSH server as a side-car inside the MySQL pod. This SSH server will allow only key-based access. The users can logon to this SSH server, and connect to the local mysql instance without a problem. Or, they can use this SSH server to forward MySQL port to their local work-computer, and use whatever MySQL client applications to talk to MySQL.
 
-Give some access Roles to this newly created service account. For example's sake we will use a bit relaxed permissions:
-* Storage/Storage Admin
-* Kubernetes Engine/Kubernetes Engine Developer
+Above may seem a lot of work, but these are secure ways to access your database from outside the cluster.
 
+------ 
 
-After setting permissions, create a key for this service account, by using "Create Key" button on next screen. Use type JSON. The key will download immediately to your computer, only once. Make a note of it's location. Keep it safe.
 
+## Actual migration / steps:
 
-| ![images/ci_1.png](images/ci_1.png) |
-| ----------------------------------- |
-
-| ![images/ci_2.png](images/ci_2.png) |
-| ----------------------------------- |
-
-| ![images/ci_3.png](images/ci_3.png) |
-| ----------------------------------- |
-
-| ![images/ci_4.png](images/ci_4.png) |
-| ----------------------------------- |
-
-| ![images/ci_5.png](images/ci_5.png) |
-| ----------------------------------- |
-
-| ![images/ci_6.png](images/ci_6.png) |
-| ----------------------------------- |
-
-
-Find the JSON file, and `cat` it on the terminal. Leave this here as it is, until we setup CircleCI.
-
-| ![images/ci_8.png](images/ci_8.png) |
-| ----------------------------------- |
-
-You also need to know ID of the current GKE project, which you can obtain by simply visiting the Home section of the current project. The Project ID is listed over there. For my project, the id is: `trainingvideos` .
-
-
-### Add new CircleCI project:
-We start by setting up a new CircleCI project in CircleCI web interface. Click "Add Project" on left pane, and connect this repository to that project.
-
-
-Select "Start Building". Select "Add Manually" on next screen. Click "Start Building" again on yet another screen. No need to download the `.circleci/config.yml`, because we are going to create it manually. Note that the first build **"will fail"**. That is ok.
-
-| ![images/ci-start-build-1.png](images/ci-start-build-1.png) |
-| ----------------------------------------------------------- |
-
-
-| ![images/ci-start-build-2.png](images/ci-start-build-2.png) |
-| ----------------------------------------------------------- |
-
-
-| ![images/ci-start-build-3.png](images/ci-start-build-3.png) |
-| ----------------------------------------------------------- |
-
-
-| ![images/ci-start-build-4.png](images/ci-start-build-4.png) |
-| ----------------------------------------------------------- |
-
-
-We setup `GCLOUD_CREDENTIALS` as environment variable . In the Project settings of this project, go to Environment variables, and add an environment variable called `GCLOUD_CREDENTIALS`. Copy the text of the `JSON` file from the text terminal and paste it in as a value for this variable.
-
-| ![images/ci_8.png](images/ci_8.png) |
-| ----------------------------------- |
-
-| ![images/ci_7.png](images/ci_7.png) |
-| ----------------------------------- |
-
-
-We need to configure `.circleci/config.yml` to do the following:
-* create and push a container image to GCR
-* create necessary configmap
-* create necessary secret
-* deploy our application as a deployment
-* create related service and ingress objects 
-
-
-The `deployment.yaml` file expects an image name and tag. But remember, we can never know the tag/hash of the image in advance. The image will always be created by circleCI as part of a pipeline-job, and therefore we can't have a fixed image tag/hash in the `deployment.yaml` file. We must use some sort of "template" file, which will have only a "place-holder" for the image tag/hash. We will replace the placeholder with the actual value of the image tag/hash while processing it through CircleCI.
-
-To be able to deploy any objects in Kubernetes cluster, you will need to connect to it through CircleCI. So we need a connection string - so to speak, which will create a `.kube/config` inside the CircleCI environment. We obtain that by choosing to connect to the cluster, which shows us the correct command.
-
-| ![images/ci_9.png](images/ci_9.png) |
-| ----------------------------------- |
-
-
-Create CircleCI environment variables for our fictional configuration file and the `MYSQL_*` environment variables.
-
-
-| ![images/ci_10.png](images/ci_10.png) |
-| ----------------------------------- |
-
-| ![images/ci_11.png](images/ci_11.png) |
-| ----------------------------------- |
-
-| ![images/ci_12.png](images/ci_12.png) |
-| ----------------------------------- |
-
-| ![images/ci_13.png](images/ci_13.png) |
-| ----------------------------------- |
-
-| ![images/ci_14.png](images/ci_14.png) |
-| ----------------------------------- |
-
-| ![images/ci_15.png](images/ci_15.png) |
-| ----------------------------------- |
-
-| ![images/ci_16.png](images/ci_16.png) |
-| ----------------------------------- |
-
-
-Update `.circleci/config.yml` to use these environment variables as needed. Then, push this updated `.circleci/config.yml` to the repository. CircleCI will see the change and will start processing it. You will notice a "workflow" showing up in CircleCI web interface.
-
-
-At this point, CircleCI will perform all the steps configured in it's `config.yml` file. Configmap will be (re)created, Secret will be (re)created, application will be deployed as a Deployment, and related Service and Ingress objects will be created.
-
-| ![images/ci_22.png](images/ci_22.png) |
-| ------------------------------------- |
-
-| ![images/ci_23.png](images/ci_23.png) |
-| ------------------------------------- |
-
-
-Here is the complete `.circleci/config.yml` file:
+### Shutdown/stop the wordpress website on old server:
 
 ```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat .circleci/config.yml | grep -v ^$
-version: 2
-jobs:
-  build:
-    docker:
-      - image: google/cloud-sdk
-    steps: 
-      - run: 
-          name: authenticate with gcloud
-          command: |
-            echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
-            gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
-      - checkout             
-      - setup_remote_docker
-      - run: |
-          gcloud auth configure-docker --quiet
-          SHORT_HASH=$(echo $CIRCLE_SHA1 | cut -c -7)      
-          docker build -t eu.gcr.io/trainingvideos/simpleapp:${SHORT_HASH} .
-          docker push eu.gcr.io/trainingvideos/simpleapp:${SHORT_HASH}
-  deploy:
-    docker:
-      - image: google/cloud-sdk  
-    steps: 
-      - run: 
-          name: authenticate with gcloud
-          command: |
-            echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
-            gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
-            gcloud container clusters get-credentials docker-to-k8s --zone europe-north1-a --project trainingvideos
-      - checkout             
-      - run: |
-          echo ${SIMPLEAPP_CONF} > simpleapp.conf
-          echo "First, deleting the old configmap: configmap-simpleapp-conf"
-          kubectl delete configmap configmap-simpleapp-conf || true
-          echo "Creating the new configmap: configmap-simpleapp-conf - using CircleCI environment variable"
-          kubectl create  configmap configmap-simpleapp-conf --from-file=simpleapp.conf
-          echo "First, deleting the old secret: simpleapp-credentials"
-          kubectl delete secret simpleapp-credentials || true
-          echo "Creating kubernetes secret: simpleapp-credentials - using CircleCI Environment variables"
-          kubectl create secret generic simpleapp-credentials \
-            --from-literal=MYSQL_HOST=${MYSQL_HOST} \
-            --from-literal=MYSQL_DATABASE=${MYSQL_DATABASE} \
-            --from-literal=MYSQL_USER=${MYSQL_USER} \
-            --from-literal=MYSQL_PASSWORD=${MYSQL_PASSWORD}
-          SHORT_HASH=$(echo $CIRCLE_SHA1 | cut -c -7)      
-          echo "SHORT_HASH is: ${SHORT_HASH}"
-          sed  s/SHORT_HASH/$SHORT_HASH/ deployment.yaml.template > deployment.yaml
-          kubectl apply -f deployment.yaml 
-          kubectl apply -f service-ingress.yaml
-workflows:
-  version: 2
-  build-and-deploy:
-    jobs: 
-      - build:
-          filters:
-            branches: 
-              only: master
-      - deploy:
-          requires:
-            - build
-          filters:
-            branches: 
-              only: master
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
+[kamran@kworkhorse ~]$ ssh root@web.witpass.co.uk 
+
+[root@web testblog.demo.wbitt.com]# cd /home/containers-runtime/testblog.demo.wbitt.com/
+
+[root@web testblog.demo.wbitt.com]# docker-compose -f docker-compose.server.yml down
+Stopping testblogdemowbittcom_testblog.demo.wbitt.com_1 ... done
+Removing testblogdemowbittcom_testblog.demo.wbitt.com_1 ... done
+Network services-network is external, skipping
 ```
 
-After successful run you see the objects in Kubernetes:
+While you are in this server, make a tarball of the web-contents of this wordpress application.
 
 ```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get deployments
-NAME        READY   UP-TO-DATE   AVAILABLE   AGE
-simpleapp   1/1     1            1           60s
-testblog    1/1     1            1           27h
+[witpass@web ~]$ cd /home/containers-data/testblog.demo.wbitt.com/
+[witpass@web testblog.demo.wbitt.com]$ tar czf /tmp/testblog.demo.wbitt.com.tar.gz .
+```
 
+Copy the tarball from your server to your local computer:
+```
+[kamran@kworkhorse ~]$ cd /tmp/
+[kamran@kworkhorse tmp]$ scp witpass@web.witpass.co.uk:/tmp/testblog.demo.wbitt.com.tar.gz .
+```
 
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get pods
-NAME                         READY   STATUS    RESTARTS   AGE
-mysql-0                      1/1     Running   0          28h
-simpleapp-5656d7cd44-g49zf   1/1     Running   0          68s
-testblog-54f855f697-5qdmz    1/1     Running   0          26h
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
+### Update DNS setting in DNS zone:
+Update DNS setting in DNS zone file for the `demo.wbitt.com` zone, and verify with the following command:
+
+```
+[kamran@kworkhorse tmp]$ dig testblog.demo.wbitt.com
+
+;; QUESTION SECTION:
+;testblog.demo.wbitt.com.	IN	A
+
+;; ANSWER SECTION:
+testblog.demo.wbitt.com. 299	IN	CNAME	traefik.demo.wbitt.com.
+traefik.demo.wbitt.com.	299	IN	A	35.228.250.6
+
+[kamran@kworkhorse tmp]$ 
 ```
 
 
-| ![images/ci_24.png](images/ci_24.png) |
-| ------------------------------------- |
+### Backup existing database:
+Back up existing database related to this wordpress website, on the old DB server:
 
-
-| ![images/ci_25.png](images/ci_25.png) |
-| ------------------------------------- |
-
-
-As an experiment, add one line to `index.html` file indicating a new version of the application - so to speak. You will see new job kicks in:
 
 ```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ vi htdocs/index.html 
+[root@db ~]# mysqldump db_testblog_demo_wbitt_com > db_testblog.demo.wbitt.com.dump
 
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ git add htdocs/index.html 
-
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ git commit -m "added first extra line in index.html"
-[master 52cfc76] added first extra line in index.html
- 1 file changed, 2 insertions(+)
-
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ git push
-Enumerating objects: 7, done.
-. . . 
-a09acc1..52cfc76  master -> master
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$
+[root@db ~]# gzip -9 db_testblog.demo.wbitt.com.dump
 ```
 
-| ![images/ci_26.png](images/ci_26.png) |
-| ------------------------------------- |
-
-| ![images/ci_27.png](images/ci_27.png) |
-| ------------------------------------- |
-
-| ![images/ci_28.png](images/ci_28.png) |
-| ------------------------------------- |
-
-| ![images/ci_29.png](images/ci_29.png) |
-| ------------------------------------- |
-
-
-Since the image has changed, the new deployment will cause the previous pod to terminate and start a new one. 
+Copy the dump-file from DB server to your local computer:
 ```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ kubectl get pods
-NAME                         READY   STATUS        RESTARTS   AGE
-mysql-0                      1/1     Running       0          28h
-simpleapp-5656d7cd44-g49zf   1/1     Terminating   0          6m22s
-simpleapp-8678c76c9d-bm8st   1/1     Running       0          21s
-testblog-54f855f697-5qdmz    1/1     Running       0          26h
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
+[kamran@kworkhorse ~]$ rsync root@db.witpass.co.uk:/root/db_testblog*.gz  /tmp/
 ```
 
-Notice that the change we introduced in our `index.html` is now visible on the web!
 
-| ![images/ci_29.png](images/ci_29.png) |
-| ------------------------------------- |
+### Restore the database to MySQL instance in Kubernetes:
 
-So, **It works!**
+Restoring the database using a web UI, such as `adminer` is straight forward. However, if you are not using a DB web UI, then the following steps need to be performed:
 
-There you have it, your application being deployed continuously using CircleCI.
+Forward the MySQL port from the Kubernetes cluster to your local computer, using kubectl. Do this in a separate shell/terminal. Before doing that, ensure that you are not running a local MySQL instance, because we need port 3306 on local computer to be available. 
 
-(End of Part 2.)
+```
+[kamran@kworkhorse mysql]$ kubectl get services
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+kubernetes   ClusterIP   10.0.0.1     <none>        443/TCP    3h22m
+mysql        ClusterIP   None         <none>        3306/TCP   11m
+```
 
+Run the following command in a separate terminal window and leave it running.
+```
+[kamran@kworkhorse mysql]$ kubectl port-forward svc/mysql 3306:3306 
+Forwarding from 127.0.0.1:3306 -> 3306
+Forwarding from [::1]:3306 -> 3306
+
+(waits forever)
+```
+
+Open a new terminal. Make sure you are in the same directory where you copied the dump file from the old DB server. Unzip the dump file.
+
+```
+[kamran@kworkhorse tmp]$ pwd
+/tmp
+
+[kamran@kworkhorse tmp]$ ls -l
+total 12504
+-rw-r--r-- 1 kamran kamran   160570 Mar  7 19:20 db_testblog.demo.wbitt.com.dump.gz
+-rw-r--r-- 1 kamran kamran 12637119 Feb 28 13:54 testblog.demo.wbitt.com.tar.gz
+
+[kamran@kworkhorse tmp]$ gzip -d db_testblog.demo.wbitt.com.dump.gz 
+
+[kamran@kworkhorse tmp]$ ls -l
+total 12900
+-rw-r--r-- 1 kamran kamran   569038 Mar  7 19:20 db_testblog.demo.wbitt.com.dump
+-rw-r--r-- 1 kamran kamran 12637119 Feb 28 13:54 testblog.demo.wbitt.com.tar.gz
+[kamran@kworkhorse tmp]$ 
+```
+
+Connect to this port (3306) on local computer, using `mysql` command, and create a MySQL database for your database, a user and a password for this user. 
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u root -p
+Enter password: 
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MySQL connection id is 6
+Server version: 5.7.29 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MySQL [(none)]> create database testblog_demo_wbitt_com ;
+Query OK, 1 row affected (0.061 sec)
+
+MySQL [(none)]> grant all on testblog_demo_wbitt_com.* to 'testblog_demo_wbitt_com'@'%' identified by 'Pi+hd8cqfGc0oWOeZOCM8w==';
+Query OK, 0 rows affected, 1 warning (0.025 sec)
+
+MySQL [(none)]> flush privileges;
+Query OK, 0 rows affected (0.028 sec)
+
+
+MySQL [(none)]> select user,host,authentication_string from mysql.user;
++-------------------------+-----------+-------------------------------------------+
+| user                    | host      | authentication_string                     |
++-------------------------+-----------+-------------------------------------------+
+| root                    | localhost | *E5A99A335AAC5AAA1C688AD99906AF4C054C7283 |
+| mysql.session           | localhost | *THISISNOTAVALIDPASSWORDTHATCANBEUSEDHERE |
+| mysql.sys               | localhost | *THISISNOTAVALIDPASSWORDTHATCANBEUSEDHERE |
+| root                    | %         | *E5A99A335AAC5AAA1C688AD99906AF4C054C7283 |
+| testblog_demo_wbitt_com | %         | *681B6FC9E9359096E16EDED829F86C9D6C86E3BC |
++-------------------------+-----------+-------------------------------------------+
+5 rows in set (0.098 sec)
+
+MySQL [(none)]> 
+
+```
+
+Now exit the mysql session, and reconnect using these new credentials, to make sure that it works:
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u testblog_demo_wbitt_com -D testblog_demo_wbitt_com -p
+Enter password: 
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MySQL connection id is 8
+Server version: 5.7.29 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MySQL [testblog_demo_wbitt_com]> show tables;
+Empty set (0.028 sec)
+
+MySQL [testblog_demo_wbitt_com]> exit
+Bye
+[kamran@kworkhorse tmp]$ 
+
+```
+
+Very good. Now load the DB dump you obtained from the old DB server, into this database:
+
+```
+[kamran@kworkhorse tmp]$ ls -l
+total 12900
+-rw-r--r-- 1 kamran kamran   569038 Mar  7 19:20 db_testblog.demo.wbitt.com.dump
+-rw-r--r-- 1 kamran kamran 12637119 Feb 28 13:54 testblog.demo.wbitt.com.tar.gz
+
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u testblog_demo_wbitt_com -D testblog_demo_wbitt_com -p < db_testblog.demo.wbitt.com.dump 
+Enter password: 
+[kamran@kworkhorse tmp]$ 
+```
+
+Reconnect and verify that the database has been restored successfully:
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u testblog_demo_wbitt_com -D testblog_demo_wbitt_com -p
+Enter password: 
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MySQL connection id is 11
+Server version: 5.7.29 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MySQL [testblog_demo_wbitt_com]> show tables;
++-----------------------------------+
+| Tables_in_testblog_demo_wbitt_com |
++-----------------------------------+
+| wp_commentmeta                    |
+| wp_comments                       |
+| wp_links                          |
+| wp_options                        |
+| wp_postmeta                       |
+| wp_posts                          |
+| wp_term_relationships             |
+| wp_term_taxonomy                  |
+| wp_termmeta                       |
+| wp_terms                          |
+| wp_usermeta                       |
+| wp_users                          |
++-----------------------------------+
+12 rows in set (0.030 sec)
+
+MySQL [testblog_demo_wbitt_com]> 
+```
+
+Database is restored on the new DB instance in Kubernetes. You can terminate the kubectl session running in the other terminal, being used to forward port 3306 to local computer.
+
+
+### Setup WordPress Deployment:
+
+Now we setup the Wordpress Deployment. Remember that the database related to this wordpress website is restored in Kubernetes, and we have the web content as a tarball on our local computer. 
+
+First, we create the PVC required for this deployment.
+
+```
+[kamran@kworkhorse kubernetes]$ kubectl apply -f wordpress-pvc.yaml 
+persistentvolumeclaim/pvc-testblog created
+
+[kamran@kworkhorse kubernetes]$ kubectl get pvc
+NAME                               STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mysql-persistent-storage-mysql-0   Bound    pvc-b03e5db9-60b8-11ea-9327-42010aa600a1   1Gi        RWO            standard       50m
+pvc-testblog                       Bound    pvc-c3b2d847-60bf-11ea-9327-42010aa600a1   1Gi        RWO            standard       18s
+[kamran@kworkhorse kubernetes]$ 
+```
+
+Now, the PVC exists, but we cannot copy any files directly inside it. It has to be mounted inside a pod/container. We will use the wordpress deployment to mount this PVC at it's designated mount point, and copy the web-content inside it. For that we need the deployment; and the deployment needs secrets. So we have to perform the following steps.
+
+
+#### Create secrets for WordPress Deployment:
+
+```
+[kamran@kworkhorse kubernetes]$ pwd
+/home/kamran/Projects/Personal/github/docker-to-kubernetes/wordpress/kubernetes
+
+
+[kamran@kworkhorse kubernetes]$ cat wordpress.env 
+WORDPRESS_DB_HOST=mysql
+WORDPRESS_DB_NAME=testblog_demo_wbitt_com
+WORDPRESS_DB_USER=testblog_demo_wbitt_com
+WORDPRESS_DB_PASSWORD=Pi+hd8cqfGc0oWOeZOCM8w==
+[kamran@kworkhorse kubernetes]$ 
+```
+
+```
+[kamran@kworkhorse kubernetes]$ ./create-wordpress-credentials.sh 
+First, deleting the old secret: wordpress-credentials
+Error from server (NotFound): secrets "wordpress-credentials" not found
+Found wordpress.env file, creating kubernetes secret: wordpress-credentials
+secret/wordpress-credentials created
+[kamran@kworkhorse kubernetes]$ 
+```
+
+**Note:** At this point, ensure that DNS is already setup correctly, so `testblog.demo.wbitt.com` points to the IP address of the reverse proxy in the k8s cluster. 
+
+```
+[kamran@kworkhorse tmp]$ dig testblog.demo.wbitt.com
+
+;; QUESTION SECTION:
+;testblog.demo.wbitt.com.	IN	A
+
+;; ANSWER SECTION:
+testblog.demo.wbitt.com. 299	IN	CNAME	traefik.demo.wbitt.com.
+traefik.demo.wbitt.com.	299	IN	A	35.228.250.6
+
+[kamran@kworkhorse tmp]$ 
+```
+
+In the `wordpress-deployment.yaml` file, ensure that the ingress has correct host name set for the wordpress website. i.e `testblog.demo.wbitt.com` . Then create the deployment:
+
+```
+[kamran@kworkhorse kubernetes]$ kubectl apply -f wordpress-deployment.yaml 
+deployment.apps/testblog created
+service/testblog created
+ingress.extensions/testblog created
+[kamran@kworkhorse kubernetes]$ 
+```
+
+```
+[kamran@kworkhorse kubernetes]$ kubectl get pods
+NAME                        READY   STATUS    RESTARTS   AGE
+mysql-0                     1/1     Running   0          67m
+testblog-54f855f697-n6bz2   1/1     Running   0          10s
+[kamran@kworkhorse kubernetes]$ 
+```
+
+As soon as the deployment is created, this wordpress application will start. It will try to connect to the database, and then it will see that the document root (`/var/www/html`) in the pod/container is empty, (because it mounts the PVC we created just now), it will be populated by the fresh wordpress installation files. If you access `testblog.demo.wbitt.com` at this moment, you will (should) see your website - without any pictures/media, or plugins. Possibly showing some errors about missing plugins. In the screenshot below, I can't see the picture of cat I placed in my blog post when this site was running through docker-compose.
+
+| ![images/website-without-pictures.png](images/website-without-pictures.png) |
+| --------------------------------------------------------------------------- |
+
+
+Don't worry. Wordpress does not have the file content yet. Just be sure that at this point, you **do not perform any actions on the wordpress web/admin interface**. Use `kubectl cp ...` command to copy the tarball of web content you obtained from the old server, inside this container, and unzip/untar it.
+
+So lets move into the directory on local computer, which has the file content from previous server and copy the web-content tarball to this pod/container.
+
+```
+[kamran@kworkhorse tmp]$ pwd
+
+[kamran@kworkhorse tmp]$ ls -l
+total 12900
+-rw-r--r-- 1 kamran kamran   569038 Mar  7 19:20 db_testblog.demo.wbitt.com.dump
+-rw-r--r-- 1 kamran kamran 12637119 Feb 28 13:54 testblog.demo.wbitt.com.tar.gz
+
+[kamran@kworkhorse tmp]$ kubectl cp testblog.demo.wbitt.com.tar.gz testblog-54f855f697-n6bz2:/tmp/ 
+```
+
+Now, login interactively to the pod/container on the OS level , using kubectl. Do some basic info collection steps:
+
+```
+root@testblog-54f855f697-n6bz2:/var/www/html# ls -ln
+total 228
+-rw-r--r--  1 33 33   420 Nov 30  2017 index.php
+-rw-r--r--  1 33 33 19935 Jan  1  2019 license.txt
+drwx------  2  0  0 16384 Mar  7 22:20 lost+found
+-rw-r--r--  1 33 33  7368 Sep  2  2019 readme.html
+-rw-r--r--  1 33 33  6939 Sep  3  2019 wp-activate.php
+drwxr-xr-x  9 33 33  4096 Dec 18 22:16 wp-admin
+-rw-r--r--  1 33 33   369 Nov 30  2017 wp-blog-header.php
+-rw-r--r--  1 33 33  2283 Jan 21  2019 wp-comments-post.php
+-rw-r--r--  1 33 33  2808 Mar  7 22:21 wp-config-sample.php
+-rw-r--r--  1 33 33  3225 Mar  7 22:21 wp-config.php
+drwxr-xr-x  5 33 33  4096 Mar  7 22:22 wp-content
+-rw-r--r--  1 33 33  3955 Oct 10 22:52 wp-cron.php
+drwxr-xr-x 20 33 33 12288 Dec 18 22:16 wp-includes
+-rw-r--r--  1 33 33  2504 Sep  3  2019 wp-links-opml.php
+-rw-r--r--  1 33 33  3326 Sep  3  2019 wp-load.php
+-rw-r--r--  1 33 33 47597 Dec  9 13:30 wp-login.php
+-rw-r--r--  1 33 33  8483 Sep  3  2019 wp-mail.php
+-rw-r--r--  1 33 33 19120 Oct 15 15:37 wp-settings.php
+-rw-r--r--  1 33 33 31112 Sep  3  2019 wp-signup.php
+-rw-r--r--  1 33 33  4764 Nov 30  2017 wp-trackback.php
+-rw-r--r--  1 33 33  3150 Jul  1  2019 xmlrpc.php
+root@testblog-54f855f697-n6bz2:/var/www/html# 
+```
+
+Now, untar this tarball  inside /var/www/html/ .
+
+```
+root@testblog-54f855f697-n6bz2:/var/www/html# tar xzf /tmp/testblog.demo.wbitt.com.tar.gz 
+
+root@testblog-54f855f697-n6bz2:/var/www/html# ls -l
+total 228
+-rw-r--r--  1 1001 1001   420 Nov 30  2017 index.php
+-rw-r--r--  1 1001 1001 19935 Jan  1  2019 license.txt
+drwx------  2 root root 16384 Mar  7 22:20 lost+found
+-rw-r--r--  1 1001 1001  7368 Sep  2  2019 readme.html
+-rw-r--r--  1 1001 1001  6939 Sep  3  2019 wp-activate.php
+drwxr-xr-x  9 1001 1001  4096 Dec 18 22:16 wp-admin
+-rw-r--r--  1 1001 1001   369 Nov 30  2017 wp-blog-header.php
+-rw-r--r--  1 1001 1001  2283 Jan 21  2019 wp-comments-post.php
+-rw-r--r--  1 1001 1001  2808 Feb 28 01:25 wp-config-sample.php
+-rw-r--r--  1 1001 1001  3248 Feb 28 01:25 wp-config.php
+drwxr-xr-x  5 1001 1001  4096 Feb 28 01:35 wp-content
+-rw-r--r--  1 1001 1001  3955 Oct 10 22:52 wp-cron.php
+drwxr-xr-x 20 1001 1001 12288 Dec 18 22:16 wp-includes
+-rw-r--r--  1 1001 1001  2504 Sep  3  2019 wp-links-opml.php
+-rw-r--r--  1 1001 1001  3326 Sep  3  2019 wp-load.php
+-rw-r--r--  1 1001 1001 47597 Dec  9 13:30 wp-login.php
+-rw-r--r--  1 1001 1001  8483 Sep  3  2019 wp-mail.php
+-rw-r--r--  1 1001 1001 19120 Oct 15 15:37 wp-settings.php
+-rw-r--r--  1 1001 1001 31112 Sep  3  2019 wp-signup.php
+-rw-r--r--  1 1001 1001  4764 Nov 30  2017 wp-trackback.php
+-rw-r--r--  1 1001 1001  3150 Jul  1  2019 xmlrpc.php
+root@testblog-54f855f697-n6bz2:/var/www/html# 
+```
+
+Fix file ownership, which is **VERY IMPORTANT**:
+
+```
+root@testblog-54f855f697-n6bz2:/var/www/html# chown -R 33:33 .  
+
+root@testblog-54f855f697-n6bz2:/var/www/html# ls -ln
+total 228
+-rw-r--r--  1 33 33   420 Nov 30  2017 index.php
+-rw-r--r--  1 33 33 19935 Jan  1  2019 license.txt
+drwx------  2 33 33 16384 Mar  7 22:20 lost+found
+-rw-r--r--  1 33 33  7368 Sep  2  2019 readme.html
+-rw-r--r--  1 33 33  6939 Sep  3  2019 wp-activate.php
+drwxr-xr-x  9 33 33  4096 Dec 18 22:16 wp-admin
+-rw-r--r--  1 33 33   369 Nov 30  2017 wp-blog-header.php
+-rw-r--r--  1 33 33  2283 Jan 21  2019 wp-comments-post.php
+-rw-r--r--  1 33 33  2808 Feb 28 01:25 wp-config-sample.php
+-rw-r--r--  1 33 33  3248 Feb 28 01:25 wp-config.php
+drwxr-xr-x  5 33 33  4096 Feb 28 01:35 wp-content
+-rw-r--r--  1 33 33  3955 Oct 10 22:52 wp-cron.php
+drwxr-xr-x 20 33 33 12288 Dec 18 22:16 wp-includes
+-rw-r--r--  1 33 33  2504 Sep  3  2019 wp-links-opml.php
+-rw-r--r--  1 33 33  3326 Sep  3  2019 wp-load.php
+-rw-r--r--  1 33 33 47597 Dec  9 13:30 wp-login.php
+-rw-r--r--  1 33 33  8483 Sep  3  2019 wp-mail.php
+-rw-r--r--  1 33 33 19120 Oct 15 15:37 wp-settings.php
+-rw-r--r--  1 33 33 31112 Sep  3  2019 wp-signup.php
+-rw-r--r--  1 33 33  4764 Nov 30  2017 wp-trackback.php
+-rw-r--r--  1 33 33  3150 Jul  1  2019 xmlrpc.php
+root@testblog-54f855f697-n6bz2:/var/www/html# 
+```
+
+Check if images of my cat are there!
+```
+root@testblog-54f855f697-n6bz2:/var/www/html# ls -l wp-content/uploads/2020/02/767px-Cat_November_2010-1a*
+-rw-r--r-- 1 www-data www-data   6239 Feb 28 01:35 wp-content/uploads/2020/02/767px-Cat_November_2010-1a-150x150.jpg
+-rw-r--r-- 1 www-data www-data  15943 Feb 28 01:35 wp-content/uploads/2020/02/767px-Cat_November_2010-1a-225x300.jpg
+-rw-r--r-- 1 www-data www-data 211437 Feb 28 01:35 wp-content/uploads/2020/02/767px-Cat_November_2010-1a.jpg
+root@testblog-54f855f697-n6bz2:/var/www/html# exit
+exit
+[kamran@kworkhorse tmp]$ 
+```
+
+Very good. Now remember, when we over-wrote all the files, the wp-config.php was also over-written, with old information. Wordpress generates this file on pod/container startup, which means, we need to restart the pod, so wordpress can re-generate the config file with correct values. So, exit the pod/container, and simply kill it , so it can restart. 
+
+```
+[kamran@kworkhorse tmp]$ kubectl delete pod testblog-54f855f697-n6bz2
+pod "testblog-54f855f697-n6bz2" deleted
+
+
+[kamran@kworkhorse tmp]$ kubectl get pods
+NAME                        READY   STATUS    RESTARTS   AGE
+mysql-0                     1/1     Running   0          82m
+testblog-54f855f697-pzhd5   1/1     Running   0          10s
+[kamran@kworkhorse tmp]$ 
+```
+
+Check logs of the new pod to see if there are any problems:
+
+```
+[kamran@kworkhorse tmp]$ kubectl logs -f testblog-54f855f697-pzhd5
+AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 10.32.0.16. Set the 'ServerName' directive globally to suppress this message
+AH00558: apache2: Could not reliably determine the server's fully qualified domain name, using 10.32.0.16. Set the 'ServerName' directive globally to suppress this message
+[Sat Mar 07 22:37:26.711030 2020] [mpm_prefork:notice] [pid 1] AH00163: Apache/2.4.38 (Debian) PHP/7.3.15 configured -- resuming normal operations
+[Sat Mar 07 22:37:26.711430 2020] [core:notice] [pid 1] AH00094: Command line: 'apache2 -D FOREGROUND'
+```
+
+I don't see any problems, so lets check the web page:
+
+| ![images/website-with-cat-picture-after-migration.png](images/website-with-cat-picture-after-migration.png) |
+| ----------------------------------------------------------------------------------------------------------- |
+
+I see my cat! Hurray! It works!
+
+
+Add another post, just to be sure! 
+
+| ![images/blog-2.png](images/blog-2.png) |
+| --------------------------------------- |
+
+It works!
+
+
+In [Part 3](Migration-Part-3.md), we deploy our simple HTML/PHP application using CI/CD.
+
+
+# Additional Notes:
+* To generate random passwords, I use: `openssl rand -base64 18`. I have set it up as an alias in my `~/.bashrc` as: `alias generate_random_16='openssl rand -base64 18'`
