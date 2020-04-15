@@ -71,7 +71,7 @@ From the docker-compose file, we have gathered the following facts:
 
 * The application runs as `simpleapp.demo.wbitt.com`. This can be handled by defining an **Ingress** object in Kubernetes.
 * **The application uses environment variables in DB connection.** This is very important. There are no usernames and passwords stored with the code. If your application does that, use this example to convert it to use environment variables instead. It is very easy!
-* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by always **creating a docker image through a CircleCI**, on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. This way, before we run the application as a deployment, the container image will be available.
+* This application "builds" its image every time it runs. i.e. It does not use a pre-built image. This is going to be a problem when we move this to Kubernetes. Kubernetes does not allow building an image on-the-fly. Instead, Kubernetes expects the container image to exist before it is used in the pod/container. We will handle this by **creating a docker image through CircleCI** on each commit to the repository, and **push that image to Google's container registry `gcr.io`**. This way, before we run the application as a deployment, the container image will be available.
 * It mounts a (bogus) configuration file under `/config/simpleapp.conf` . This can be handled by creating a **configmap** of this configuration file. 
 * Certain files in this application uses a database connection to MySQL server. To get this to work in Kubernetes, we need to pass some ENV variables as **secret**. 
 * It connects to an external network. This network is actually the network on which Traefik is configured to serve. This is not needed in Kubernetes.
@@ -91,10 +91,10 @@ Below is an `index.html` file from the `htdocs` directory. This file will experi
 ``` 
 
 
-The biggest hurdle in such applications is to create the image - automatically. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. The work around is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended - as it is manual work. We need to automate this somehow, which in-turn means we need to use a CI/CD tool. 
+The biggest hurdle in such applications is to create the image - automatically. The problem is that even if the image is a public image, we would not know what is the tag/version number of the latest image. Few ways to achieve this is to (a) always use `latest` , or (b) create/assign version numbers yourself and assign them as tags to the image. Doing any of (a) or (b) is **not** recommended - as it is manual work. We need to automate this somehow, which in-turn means we need to use a CI/CD tool. 
 
 ## Migration plan:
-To be able to deploy our simple PHP  application to kubernetes, we would need to perform the following steps, in order:
+To be able to deploy our simple PHP  application to kubernetes, we would need to perform the following steps.
 
 **Note:** It is VERY important that you set TTL for the DNS zone of the related domain to a low value, say "5 minutes". This will ensure that when you change DNS records, the change is propagated quickly across DNS servers around the world.
 
@@ -626,7 +626,7 @@ To be able to deploy any objects in Kubernetes cluster, you will need to connect
 | ----------------------------------- |
 
 
-Create CircleCI environment variables for our fictional configuration file and the `MYSQL_*` environment variables.
+Create CircleCI environment variables for our configuration file and the `MYSQL_*` environment variables.
 
 
 | ![images/ci_10.png](images/ci_10.png) |
