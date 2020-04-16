@@ -565,8 +565,8 @@ After setting permissions, create a key for this service account, by using "Crea
 
 Find the JSON file, and `cat` it on the terminal. Leave this here as it is, until we setup GitLabCI.
 
-| ![images/ci_8.png](images/ci_8.png) |
-| ----------------------------------- |
+| ![images/gitlab-access-token-json.png](images/gitlab-access-token-json.png) |
+| --------------------------------------------------------------------------- |
 
 You also need to know ID of the current GKE project, which you can obtain by simply visiting the Home section of the current project. The Project ID is listed over there. For my project, the id is: `trainingvideos` .
 
