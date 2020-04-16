@@ -704,7 +704,7 @@ SIMPLEAPP_CONFIG_FILE: (the contents of simpleapp.conf from your computer)
 | --------------------------------------------------------------------------------------- |
 
 
-Once, everything is ready, it is a good idea to lint your .gitlab-ci.yaml file, using a special link associated with your gitlab repository. Though, **please do not trust it too much!**
+Once, everything is ready, it is a good idea to lint your `.gitlab-ci.yaml` file, using a special link associated with your gitlab repository. Though, **please do not trust it too much!**
 
 The link will look like this:
 
@@ -715,7 +715,7 @@ The link will look like this:
 
 
 
-Now, commit and push the .gitlab-ci.yaml file along any changes, and the pipeline will run and should deploy the application on the Kubernetes cluster.
+Now, commit and push the `.gitlab-ci.yaml` file along any changes, and the pipeline will run and should deploy the application on the Kubernetes cluster.
 
 | ![images/gitlab-ci-pipeline.png](images/gitlab-ci-pipeline.png) |
 | --------------------------------------------------------------- |
