@@ -725,8 +725,8 @@ Now, commit and push the .gitlab-ci.yaml file along any changes, and the pipelin
 | ------------------------------------------------------------------------------------- |
 
 
-| ![images/gitlab-pipeline-jobs-and-stages.png.png](images/gitlab-pipeline-jobs-and-stages.png.png) |
-| ------------------------------------------------------------------------------------- |
+| ![images/gitlab-pipeline-jobs-and-stages.png](images/gitlab-pipeline-jobs-and-stages.png) |
+| ----------------------------------------------------------------------------------------- |
 (Note: The above image was added to this document at a later time. That is why you see "10 hours ago" under the timing column.)
 
 
