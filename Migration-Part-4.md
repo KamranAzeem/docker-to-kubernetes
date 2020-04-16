@@ -1,4 +1,4 @@
-In the previous article, we saw how to setup GitHub+GitLabCI to automatically deploy an application in the Kubernetes cluster. In this article I will show you how to deploy an application from Gitlab, using Gitlab's built in CI/CD and it's shared runners.
+In the [previous article](Migration-Part-3), we saw how to setup GitHub+GitLabCI to automatically deploy an application in the Kubernetes cluster. In this article I will show you how to deploy an application from Gitlab, using Gitlab's built in CI/CD and it's shared runners.
 
 # Deploy an application through GitLab CI/CD
 In this article, I have taken the `simpleapp.demo.wbitt.com` repository from GitHub, and hosted it in Gitlab as a separate copy. Since we would like to use GitLab's CI instead of GitLabCI, I have disabled the `.GitLabCI/config` by renaming it to `.GitLabCI.disabled/config` . You can simply delete `.config` directory if you want to. 
