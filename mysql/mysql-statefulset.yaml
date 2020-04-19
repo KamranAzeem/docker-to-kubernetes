@@ -88,8 +88,8 @@ spec:
 #    But if you are going to run multiple pods for a service, 
 #    it is better to create clusterIP type kubernetes service.
 # ClusterIP:none creates necessary DNS entries for a service, 
-#                and, these entries have proper backend pointing to the backend containers,
-#                but, there is no load balancing.
+#    and, these entries have proper backend pointing to the backend containers,
+#    but, there is no load balancing.
 # type:ClusterIP creates same as above, but also provides load balancing between multiple backends.
 
 

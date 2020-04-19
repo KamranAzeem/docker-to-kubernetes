@@ -321,8 +321,14 @@ The MySQL setup runs a MySQL:5.7 docker container image. This image is capable o
 #### Create secret for MySQL:
 There is a file in this repository, named `mysql.env`. Update the value for `MYSQL_ROOT_PASSWORD`. Then, use the `create-mysql-credentials.sh` file to create `MYSQL_ROOT_PASSWORD` as a **secret**  in your kubernetes cluster. For the sake of example, everything will be deployed in the `default` namespace.
 
+Create a strong password to be used as `MYSQL_ROOT_PASSWORD` and set it up in `mysql.env` file:
 ```
-[kamran@kworkhorse mysql]$ ./create-mysql-credentials.sh 
+[kamran@kworkhorse mysql]$ cat mysql.env
+MYSQL_ROOT_PASSWORD=0NNuWqK6YgSrR0CsS8c3aEHR
+```
+
+```
+[kamran@kworkhorse mysql]$ ./create-mysql-secret.sh 
 First delete the old secret: mysql-credentials
 Error from server (NotFound): secrets "mysql-credentials" not found
 Found mysql.env file, creating kubernetes secret: mysql-credentials
@@ -361,7 +367,7 @@ mysql-persistent-storage-mysql-0   Bound    pvc-b03e5db9-60b8-11ea-9327-42010aa6
 [kamran@kworkhorse kubernetes]$ 
 ```
 
-
+#### Use mysql from inside the container:
 ```
 [kamran@kworkhorse mysql]$ kubectl exec -it mysql-0 bash
 
@@ -391,7 +397,27 @@ mysql> show databases;
 4 rows in set (0.04 sec)
 
 mysql> 
+```
 
+#### Connect to MySQL from your local computer using port-forward:
+
+Run the following command in a separate terminal window and leave it running.
+```
+[kamran@kworkhorse mysql]$ kubectl port-forward svc/mysql 3306:3306 
+Forwarding from 127.0.0.1:3306 -> 3306
+Forwarding from [::1]:3306 -> 3306
+
+(waits forever)
+```
+
+Open a new terminal on your local computer, and connect to this port (3306), using `mysql` command. 
+
+```
+[kamran@kworkhorse tmp]$ mysql -h 127.0.0.1 -u root -p
+Enter password: 
+
+
+MySQL [(none)]>
 ```
 
 MySQL running properly. No more to be done about MySQL.

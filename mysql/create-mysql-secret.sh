@@ -10,6 +10,7 @@ fi
 echo "First delete the old secret: mysql-credentials"
 kubectl delete secret mysql-credentials  || true
 
+echo
 echo "Found mysql.env file, creating kubernetes secret: mysql-credentials"
 source ./mysql.env
 
