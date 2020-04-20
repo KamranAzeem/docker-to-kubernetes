@@ -654,7 +654,7 @@ The pipeline defined in the `.gitlab-ci.yml` file above, has two stages:
 * build-image
 
 ,and the `deploy` stage has just one job inside it:
-* deploy  
+* deploy-image  
 
 Visually, it looks like this:
 
