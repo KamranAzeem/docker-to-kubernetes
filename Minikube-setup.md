@@ -170,10 +170,9 @@ To use the dashboard addon, run the `minikube dashboard` command:
 🤔  Verifying proxy health ...
 🎉  Opening http://127.0.0.1:37419/api/v1/namespaces/kubernetes-dashboard/services/http:kubernetes-dashboard:/proxy/ in your default browser...
 Opening in existing browser session.
-
-(At this point a browser window will open in your computer and Kubernetes dashboard will be running visible inside it.)
 ```
 
+(At this point a browser window will open in your computer and Kubernetes dashboard will be running visible inside it.)
 
 |  ![images/minikube-dashboard.png](images/minikube-dashboard.png) |
 | --------------------------------------------------------------- |
@@ -366,38 +365,8 @@ The solution is to connect this VM on this isolated network, to yet another netw
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Further reading:
+* [https://wiki.libvirt.org/page/VirtualNetworking](https://wiki.libvirt.org/page/VirtualNetworking)
 * [https://kubernetes.io/docs/setup/learning-environment/minikube/](https://kubernetes.io/docs/setup/learning-environment/minikube/)
 * [https://docs.gitlab.com/charts/development/minikube/](https://docs.gitlab.com/charts/development/minikube/)
 * [https://minikube.sigs.k8s.io/docs/handbook/](https://minikube.sigs.k8s.io/docs/handbook/)
