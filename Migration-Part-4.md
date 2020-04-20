@@ -323,9 +323,10 @@ MYSQL_PASSWORD=zxSVgF9OC7O3bCOqsLOe4Q==
 
 Create the secret:
 ```
-[kamran@kworkhorse simpleapp.demo.wbitt.com]$ ./create-simpleapp-credentials.sh 
+[kamran@kworkhorse simpleapp.demo.wbitt.com]$ ./create-simpleapp-secret.sh 
 First, deleting the old secret: simpleapp-credentials
 Error from server (NotFound): secrets "simpleapp-credentials" not found
+
 Found simpleapp.env file, creating kubernetes secret: simpleapp-credentials
 secret/simpleapp-credentials created
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
@@ -576,7 +577,6 @@ The actual pipeline for this repository will be setup by the `.gitlab-ci.yml` fi
 
 ```
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ cat .gitlab-ci.yml
-image: php:latest
 stages:
   - build
   - deploy
@@ -584,24 +584,22 @@ stages:
 variables:
   CONTAINER_IMAGE: eu.gcr.io/${GCLOUD_PROJECT_ID}/simpleapp
 
-lint:
+run-lint:
   stage: build
+  image: php:latest
   script:
-    - find -L . -name '*.php' -print0 | xargs -0 -n 1 -P 4 php -ln
+    - find . -name '*.php' -exec php -ln '{}' ';'
   only:
     - master
 
 
-build:
+build-image:
   stage: build
-  # This docker "image" is used by the runner. 
   image: docker:latest
   services:
-    # For this job, "docker in docker" runs as a service, inside the runner,
-    #   so docker commands can find the docker daemon and do their thing.
     - docker:dind
   script:
-    # Notice, this is not "google/cloud-sdk", so we can't use `gcloud auth configure-docker` command.
+    # Notice, this image is not "google/cloud-sdk", so we can't use `gcloud auth configure-docker` command.
     - echo  ${GCLOUD_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
     - docker build -t ${CONTAINER_IMAGE}:${CI_COMMIT_SHORT_SHA}  .
     - docker push ${CONTAINER_IMAGE}:${CI_COMMIT_SHORT_SHA}
@@ -609,7 +607,7 @@ build:
     - master
 
 
-deploy:
+deploy-image:
   image: google/cloud-sdk
   stage: deploy
   script:
@@ -619,6 +617,7 @@ deploy:
     - echo $GCLOUD_CREDENTIALS > ${HOME}/gcloud-service-key.json
     - gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
     - gcloud container clusters get-credentials ${GCLOUD_CLUSTER_NAME} --zone ${GCLOUD_ZONE} --project ${GCLOUD_PROJECT_ID}
+    # Application deployment starts here:
     - echo ${SIMPLEAPP_CONFIG_FILE} > simpleapp.conf
     - 'echo "First, deleting the old configmap: configmap-simpleapp-conf"'
     - kubectl delete configmap configmap-simpleapp-conf || true
@@ -627,7 +626,7 @@ deploy:
     - 'echo "First, deleting the old secret: simpleapp-credentials"'
     - kubectl delete secret simpleapp-credentials || true
     - 'echo "Creating kubernetes secret: simpleapp-credentials - using GitLabCI Environment variables"'
-    # Multiline must be broken in a specific way:
+    # Multi-line instructions must be broken in a specific way:
     # https://gitlab.com/gitlab-org/gitlab-runner/issues/166
     - |
       kubectl create secret generic simpleapp-credentials \
@@ -642,6 +641,7 @@ deploy:
     - kubectl apply -f service-ingress.yaml
   only:
     - master
+
 [kamran@kworkhorse simpleapp.demo.wbitt.com]$ 
 ```
 
@@ -650,8 +650,8 @@ The pipeline defined in the `.gitlab-ci.yml` file above, has two stages:
 * deploy
 
 ,where the `build` stage has two jobs inside it:
-* lint
-* build
+* run-lint
+* build-image
 
 ,and the `deploy` stage has just one job inside it:
 * deploy  
@@ -721,13 +721,9 @@ Now, commit and push the `.gitlab-ci.yaml` file along any changes, and the pipel
 | --------------------------------------------------------------- |
 
 
-| ![images/gitlab-ci-pipeline-successful.png](images/gitlab-ci-pipeline-successful.png) |
-| ------------------------------------------------------------------------------------- |
-
-
 | ![images/gitlab-pipeline-jobs-and-stages.png](images/gitlab-pipeline-jobs-and-stages.png) |
 | ----------------------------------------------------------------------------------------- |
-(Note: The above image was added to this document at a later time. That is why you see "10 hours ago" under the timing column.)
+
 
 
 | ![images/gitlab-ci-job-output.png](images/gitlab-ci-job-output.png) |
