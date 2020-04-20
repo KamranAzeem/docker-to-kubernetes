@@ -312,6 +312,7 @@ sudo: /etc/environment: No such file or directory
 * You can, though, use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS. 
 
 The solutions to these limitations are discussed later in this document.
+
 ------
 
 # How minikube works - the networking part
