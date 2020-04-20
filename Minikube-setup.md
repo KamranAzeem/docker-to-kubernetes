@@ -1,8 +1,25 @@
 # Deploying applications locally on minikube:
+If you are a developer (or even a system administrator), and you want to experiment with [Kubernetes](https://kubernetes.io), then [minikube](https://github.com/kubernetes/minikube) is something you should really look into. It is a simple single-node kubernetes cluster, which installs easy on your work computer - as a small virtual machine. It is open-source, and is free of cost. It is especially useful, when you want to learn / work with Kubernetes, but can't afford to run even a small Kubernetes cluster in a cloud environment, such as GCP, etc. 
+
+The emphasis is on having minikube *running as a VM*, (not as a process on docker), because this takes away all the possible complexity away from your local computer. It (minikube VM) makes setting up and running the kubernetes cluster very easy. 
+
+## What do you need to get it to work?
+You need decently powered computer, with following specs:
+* CPUs with hardware virtualization (Intel VT or AMD-V). Normally Intel's i3, i5, i7 (and now i9), and AMD's FX 63xx, 83xx, 9xxx, A10, A8, etc  are a good choices. 
+* Minimum 4 GB RAM is good enough if you want to run Linux. Minikube takes 2 GB RAM from host computer, and assigns it to the minikube VM. If you are using Windows, then you need more, because windows is basically bloatware, and it just abuses RAM. 
+* At least 20 GB free disk-space on your host OS, because minikube will create a 20 GB virtual disk. You can increase the size of the virtual disk at the time of minikube setup.
+* A Hypervisor running on the computer, such as KVM. I don't recommend VirtualBox, or HyperV, or anything else. However, if you are on Windows or Mac, then you have no choice but to use one of these.
+* Chromebooks will not work.
 
 ## Install and Setup Minikube on your local computer:
+Lets install minikube on our system. The computer I am using is an Intel i7, 16 GB RAM, runs Fedora Linux 31, and runs KVM as Hypervisor. Just so you know, KVM is world's strongest, most efficient and most lightweight Hypervisor. It runs directly inside the Linux kernel - as a loadable kernel module. RedHat (world's largest open source company) uses KVM in the heart of it's **RedHat Enterprise Virtualization** product. AWS (the biggest cloud provider) is also moving it's infrastructure from XEN to KVM.
 
-If you installed Google-Cloud-SDK on your computer, then you should know that it provides lots of packages, such as `kubectl`, as well as `minikube` ; which you can install using gcloud commands:
+**Note:** This document was written for a computer, which has Fedora Linux as Host OS and KVM as Hypervisor. If you have a different OS or Hypervisor on your computer, then you need to consult a different guide for installing minikube on your computer.
+ 
+### Prerequisites:
+Besides OS and Hypervisor, you also need some additional software.
+
+If you installed Google-Cloud-SDK on your computer, then you should know that it provides lots of packages, such as `kubectl`, *as well as* `minikube`! You can install these using gcloud commands:
 ```
 gcloud components list
 
@@ -280,11 +297,26 @@ kubeconfig: Configured
 [kamran@kworkhorse ~]$ 
 ```
 
-Find the IP of your minikube machine: (more on this later)
+## Lets just verify host to minikube VM connectivity:
+
+Find the IP of your minikube machine. This is important for understanding, but we will talk about this in a moment.
 ```
 [kamran@kworkhorse ~]$ minikube ip
 192.168.39.174
 ```
+
+```
+[kamran@kworkhorse ~]$ ping 192.168.39.174
+PING 192.168.39.174 (192.168.39.174) 56(84) bytes of data.
+64 bytes from 192.168.39.174: icmp_seq=1 ttl=64 time=0.195 ms
+64 bytes from 192.168.39.174: icmp_seq=2 ttl=64 time=0.272 ms
+^C
+--- 192.168.39.174 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1009ms
+rtt min/avg/max/mdev = 0.195/0.233/0.272/0.038 ms
+[kamran@kworkhorse ~]$ 
+```
+
 
 For any OS related maintenance (or exploration), log onto the minikube vm directly, using `minikube ssh` command:
 ```
@@ -305,24 +337,131 @@ sudo: /etc/environment: No such file or directory
 (Ignore the error message about `/etc/environment`) 
 
 
-## Some limitations:
+## Setup `/etc/hosts` on host computer:
+On the host computer, add an entry for minikube in the `/etc/hosts` file.
 
-* All Kubernetes clusters allow you to create services of `type: NodePort`, which helps you reach your service running inside the cluster, from outside the cluster. This is the cheapest solution. However, typing in long port numbers in the service's URL may feel cumbersome and frustrating. Therefore, you should setup a LoadBalancer in minikube yourself, such as MetalLB. It is surprisingly easy to setup and easy to use! 
+```
+[root@kworkhorse ~]# head /etc/hosts
+127.0.0.1  localhost localhost.localdomain
+
+# minikube VM
+192.168.39.174	minikube
+[root@kworkhorse ~]#
+```
+
+
+## Use kubectl to interact with kuberntes cluster running in minikube:
+Now we have minikube installed. It is time to start using it. We already have kubectl installed on the host computer, and minikube has already created a `kube/config` for us. Minikube also sets the context for kubectl to use minikube cluster. So if we run `kubectl` commands against this cluster, the commands will work. 
+
+```
+[kamran@kworkhorse ~]$ kubectl config get-contexts
+CURRENT   NAME                                                    CLUSTER                                                 AUTHINFO                                                NAMESPACE
+          gke_trainingvideos_europe-north1-a_docker-to-k8s-demo   gke_trainingvideos_europe-north1-a_docker-to-k8s-demo   gke_trainingvideos_europe-north1-a_docker-to-k8s-demo   
+          kubernetes-admin@kubernetes                             kubernetes                                              kubernetes-admin                                        
+*         minikube                                                minikube                                                minikube                                                
+[kamran@kworkhorse ~]$ 
+```
+
+```
+[kamran@kworkhorse ~]$ kubectl get nodes -o wide
+NAME       STATUS   ROLES    AGE     VERSION   INTERNAL-IP      EXTERNAL-IP   OS-IMAGE               KERNEL-VERSION   CONTAINER-RUNTIME
+minikube   Ready    master   3d22h   v1.18.0   192.168.39.174   <none>        Buildroot 2019.02.10   4.19.107         docker://19.3.8
+[kamran@kworkhorse ~]$ 
+```
+
+## Create our first deployment on this cluster:
+Lets create our first deployment on this cluster, and then access it from our host computer.
+
+```
+[kamran@kworkhorse ~]$ kubectl create deployment nginx --image=nginx:alpine
+deployment.apps/nginx created
+
+[kamran@kworkhorse ~]$ kubectl get pods
+NAME                     READY   STATUS    RESTARTS   AGE
+nginx-745b4df97d-wjrtr   1/1     Running   0          14s
+[kamran@kworkhorse ~]$ 
+```
+
+Lets expose this deployment as a service of `type: NodePort`, so we can access it from our host computer. 
+
+```
+[kamran@kworkhorse ~]$ kubectl expose deployment nginx --type=NodePort --port 80
+service/nginx exposed
+
+
+[kamran@kworkhorse ~]$ kubectl get svc
+NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP        4d1h
+nginx        NodePort    10.98.136.156   <none>        80:31255/TCP   6s
+[kamran@kworkhorse ~]$ 
+
+```
+
+Now, we can access this service using our minikube VM's IP address and the NodePort assigned to the service.
+
+```
+[kamran@kworkhorse ~]$ curl 192.168.39.174:31255
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+. . . 
+</head>
+<h1>Welcome to nginx!</h1>
+</html>
+[kamran@kworkhorse ~]$ 
+```
+
+Great! So we can access the service using VM's IP and the NodePort of the service.
+
+
+## Update `/etc/hosts` with the IP address of the minikube VM:
+Now, two things. 
+* Accessing your kubernetes services using node's IP address is kind of silly. Because you need to remember the IP address of the VM. Or, obtain it from `minikube ip` command each time before doing anything useful. For this, we can put it in our `/etc/hosts` 
+* The IP of the minikube VM may change from time to time, which means you will be required to update `/etc/hosts` almost always.
+
+So the above will send you running in circles. My suggestion is to keep the IP in the `/etc/hosts`, and then create a script which you can use to simply update the `/etc/hosts` file without much hassle. Since `/etc/hosts` is only writable by user `root`, you will either need to run this script as `sudo` , or run it directly as `root`. A better work-around is that you change the group ownership of the `/etc/hosts` file to your the group your user belongs to (e.g. `sudo chgrp kamran /etc/hosts`). Then also add write permissions to the group (i.e. `sudo chmod g+w /etc/hosts`). This way you will be able to edit the /etc/hosts file without `sudo` or being `root`, and it will still be safe.
+
+First, lets add this in /etc/hosts:
+```
+[root@kworkhorse ~]# cat /etc/hosts
+127.0.0.1  localhost localhost.localdomain
+
+# minikube VM
+192.168.39.174	minikube
+[root@kworkhorse ~]# 
+```
+
+
+```
+#!/bin/bash
+MINIKUBE_IP=$(minikube ip)
+if [ $? -eq 0 ]; then
+  echo "Updating /etc/hosts file ..."
+  sed s/^.*[[:space:]]minikube/${MINIKUBE_IP}\ minikube/g /etc/hosts
+else
+  echo "'minikube ip' command did not return a valid IP address. Skipping update."
+fi 
+```
+
+
+# Some limitations of minikube:
+
+* The IP address of the minikube VM may change during subsequent `stop` , `start` operations. 
+* MiniKube does not provide you the ability to create services as `type: LoadBalancer`. (Actually it does, but it is as horrible as not providing it). Nevertheless, all Kubernetes clusters allow you to create services of `type: NodePort`, which helps you reach your service running inside the cluster, from outside the cluster. This is the cheapest solution. However, typing in long port numbers in the service's URL may feel cumbersome and frustrating. Therefore, you should setup a LoadBalancer in minikube yourself, such as MetalLB. It is surprisingly easy to setup and easy to use! 
 * Can't setup any HTTPS reverse proxy with LetsEncrypt's HTTP challenge because you will most probably be behind a home router/firewall. If you install Traefik with HTTPS support enabled, (without enabling LetsEncrypt), you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate is self signed, but at least you will get HTTPS URLs working. 
 * You can, though, use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS. 
 
-The solutions to these limitations are discussed later in this document.
-
 ------
 
-# How minikube works - the networking part
+# How minikube works - the networking part - Advanced topic
 
 First, if you installed minikube **on Linux** *and* **used KVM for Virtualization**, then congratulations, you made the best choice! :) The reason is, Linux and KVM setup is very simple and straight-forward. There is nothing hidden, complicated, fearful or frustrating - as it is the case with Windows and VirtualBox/HyperV. (I will discuss this at a later time.)
 
 This article discusses a minikube VM, running in KVM, on Fedora Linux.
 
 ## KVM virtual networks:
-By default, KVM sets up a virtual network on your Linux host, and calls it `virbr0` (or, Virtual Bridge - Zero). This is a **NAT** type network,(Network Address Translation), which NATs any traffic coming in from inside this virtual network , trying to reach the internet, via any of the physical devices on your host. i.e either your wireless adapter, or network/ethernet port, or modem. So, this way, not only you can access the VMs you create (on this network), the VMs (on this network) can easily reach the internet also. 
+By default, KVM (libvirt) sets up a virtual network on your Linux host, and calls it `virbr0` (or, Virtual Bridge - Zero). This is a **NAT** type network,(Network Address Translation), which NATs any traffic coming in from inside this virtual network, trying to reach the internet, via any of the physical devices on your host. i.e either your wireless adapter, or network/ethernet port, or modem. So, this way, not only you can access the VMs you create (on this network), the VMs (on this network) can easily reach the internet also. 
 
 When you install `minikube` , it creates an additional **isolated** virtual network inside KVM, and connects the minikube VM to both of these networks. i.e. it attaches itself to the NAT network as well as the isolated network. Like so:
 
@@ -330,42 +469,256 @@ When you install `minikube` , it creates an additional **isolated** virtual netw
 | ----------------------------------------------------------- |
 
 
-Now, comes the million dollar question. If a VM is accessible from the host computer over the regular NAT network, and if the VM can also reach the internet, why minikube uses two networks? Wouldn't one be enough for the required functionality? 
+# Why minikube uses two different networks?
+Basically, I found no documentation on this topic so far. Minikube's documentation is completely silent about it. It is not discussed in any discussion forums, or GitHub issues, etc. Some people have asked somewhat similar questions, but either the discussion went into another direction, or the issue/thread simply died.
 
-### The problem:
-Good job, if you asked this question! The answer is very interesting. You see, minikube is a piece of software, which primarily wants to achieve few things:
-* It needs to setup a VM on the Hypervisor you have on your host computer, and then run the complete setup procedure to install Kubernetes on this VM.
-* It needs to setup some access mechanism for you to be able to use this (single-node) kubernetes cluster running on this VM , as a regular user.
-* It needs to be able to perform day to day management operations on this VM.
+Below is my understanding so far. 
 
-To be able to do these, it needs to be able to talk the the Hypervisor, and also be able to reach the VM on the OS level, such as performing a simple operation as `minikube ssh` . When you pass the `--driver=kvm2` - or whatever Hypervisor you have on your computer - on the `minikube start` command, minikube configures itself to talk to that particular Hypervisor and get things done. That handles the "talking to the Hypervisor" part. Now, after the VM is created, minikube needs to SSH into the VM and run the setup process. Then, after the setup finishes, it needs to write certain `.kube/config` file for you, on the host computer, to be able to use this cluster. 
+I think that minikube simply wants to deliver a development environment **completely local** to your work-computer. It does not want the kubernetes cluster (running inside the minikube VM) to be reached from the any other network. It also does not want to step on anyone else's toes in terms of IP addresses or networking in general - on this computer. That is why it simply sets up a new **"isolated"** virtual network, and sets up the VM to run on this network. Since the minikube VM needs to pull necessary software from the internet, such as `boot2docker.iso` and `minikube-v.x.y.z.iso`, and other things, it also connects the VM to a **NAT** network, which is normally the **default** network on any Hypervisor.
 
-Now, consider a this scenario. If this VM had a dynamic IP address, then `minikube` can still setup the VM, and can run the setup process as well. It will also generate the `.kube/config` file for you and other OS/ssh related files. **But,** what if the VM restarts and gets a new IP address from the Hypervisor? It is on a virtual network served by a local DHCP service. So, there are high chances that some day, the IP will change, and suddenly you won't be able to do simple `kubectl get pods` because the VM is running on a new IP, which essentially means that the kubernetes API server is now listening on a new IP address. What is that IP address? well, nobody knows, until you do some troubleshooting, and look inside certain log files, insect VM, etc, etc.
+The minikube bootstrap process talks to the Hypervisor - KVM in our case - and dictates how the VM will be setup, such as:
+* number of CPU cores
+* amount of RAM
+* size of disk
+* network cards, and which network card connects to which network
 
-Now you may be thinking, well, why doesn't it simply assigns a static IP to the minikube VM, and gets on with it's life? That is not a simple thing to do. I mean, sure you can stick a assumed-to-be-free fixed IP address of your choice to the VM at the time of VM creation, and all will be good! Right? No. Wrong. The reason is, how would the minikube setup process know which IP on the virtual network is unused, and then simply use that as fixed IP? Probably scan the virtual network and exclude the "alive" IPs from your options, and then use an IP which is did not show up in the scan! Simple, right? Wrong again. What if the IP minikube decides on, is actually in-use by another VM on the same network, which happens to be in the stopped state during the minikube's investigation, and later when that VM comes back online, there will be a problem! Two VMs using the same IP addresses! 
+When you pass the `--driver=kvm2` - or whatever Hypervisor you have on your computer - on the `minikube start` command, minikube configures itself to talk to that particular Hypervisor and get things done. That handles the "talking to the Hypervisor" part. When the VM is being created, the DHCP service attached to the virtual network assigns an IP address to it. This IP address can be queried/obtained directly from the hypervisor. e.g.
 
-If we just assume for a second that minikube's IP being changed on a DHCP network is not a big deal, and minikube can fix this problem by: talking to the Hypervisor, obtain the new IP address, update the `kube/config` file it created for you with the new IP addresses. Sure! So this would mean that you will need to run some imaginary `minikube update-kube-config` command before you are able to run simple `kubectl get pods` command. That would be very frustrating. Remember, I am completely ignoring other potential problems like SSH fingerprints being changed, etc, for simplicity's sake.
-
-
-So, we want a predictable way to reach the VM, but that does not seem to be an option on the existing virtual network! There are many ifs and buts if you use this scenario. 
-
-The predictable way to reach and use this VM would be that it had a fixed IP address. Since that is not possible on existing virtual network, we need to create an independent virtual network, solely for minikube's use.
-
-This means, minikube would query the Hypervisor for all networks currently in use, and then create a new virtual network making sure to pick a network range not in conflict with existing networks. This is fairly easy thing to do. Once it creates such a network, it can assign whatever IP address it wishes (from the new virtual network) to the minikube VM. In this way, it is straight forward to keep a note of this VM's IP address and setup necessary configuration files both for minikube's use, and for your `kubectl`, so you can use it as a normal user.
-
-The only additional configuration minikube setup process while creating the virtual network is to create it as an **isolated network**. The reason behind this decision is to make sure that this virtual network is used solely for minikube, and you as a user do not create additional VMs in this virtual network. Now, there are chances that some user may still (accidentally) create some other VM (at a later time) in this network, by selecting minikube' network as a network for the new VM. Even if someone does that, the VM will be not able to reach the internet, **because it is on an isolated network!**. Alright, so isolated network ensures that anyone can access the VM connected to it, and the VM can also access the host , but that is about it. Being not a NAT network, if the (minikube) VM on this isolated network needs to get something from the internet, it can't, solely because of the type of network it is on! So, how to get all the stuff from the internet on the minikube VM?
-
-## The solution:
-
-The solution is to connect this VM on this isolated network, to yet another network, which can perform NAT. That way, we can communicate with this VM over the isolated network, and the VM can still reach the internet, through the other NAT network.
-
-| ![images/minikube-network.png](images/minikube-network.png) |
-| ----------------------------------------------------------- |
+```
+[root@kworkhorse ~]# virsh net-list
+ Name              State    Autostart   Persistent
+----------------------------------------------------
+ default           active   yes         yes
+ k8s-kubeadm-net   active   yes         yes
+ minikube-net      active   yes         yes
 
 
+[root@kworkhorse ~]# virsh net-dhcp-leases minikube-net
+ Expiry Time           MAC address         Protocol   IP address          Hostname   Client ID or DUID
+-----------------------------------------------------------------------------------------------------------
+ 2020-04-21 00:05:03   30:e0:ec:bf:64:8e   ipv4       192.168.39.174/24   minikube   01:30:e0:ec:bf:64:8e
+
+[root@kworkhorse ~]# 
+```
+
+The minikube IP address discussed everywhere in this document is `192.168.39.174` .
+
+During the bootstrap process minikube uses this IP address to configure various aspects of kubernetes components, and also places certain SSH keys inside the VM. It then does a ssh fingerprint scan against that IP address and keeps that in your local user's local config files specific to minikue, inside `~/.minikube` directory. It also configures a context for this newly created single-node kubernetes cluster, and places that inside your `~/.kube/config` file - using the same IP. Inside the VM, minikube configures kubernetes API server to only bind to the IP address from the isolated network. 
+
+All of above happens when you use `minikube start --driver=kvm2` command. (The driver can be a different one depending on your hypervisor). Minikube perform all these checks every time you `start` the VM from the stopped state. If, for some reason, the IP changes, minikube bootstrap process updates all necessary file. 
+
+This is the reason that `minikube ip` command **never** returns you the IP of the VM when the minikube VM is in stopped state. It does not just read the IP from config file and shows it to you. It actually queries the hypervisor each time `minikube ip` command is issued and depending on the VM's state, either shows the IP currently assigned to the VM by KVM's DHCP service, or refuses to show it to you if the VM is found in the stopped state. Below are examples of both cases:
+
+```
+[kamran@kworkhorse ~]$ minikube ip
+🤷  The control plane node must be running for this command
+👉  To fix this, run: "minikube start"
+[kamran@kworkhorse ~]$
+```
+
+```
+[kamran@kworkhorse ~]$ minikube ip
+192.168.39.174
+[kamran@kworkhorse ~]$
+```
+
+By the way, networking perspective, the minikube VM is accessible from the host, over both isolated and NAT networks. It is just that the kubectl commands will expect to connect to the IP of the API server listed in `.kube/config` file. This IP will always be from the isolated network. 
+
+Below I have shown that this VM is accessible using standard network tools over both networks it is connected to. First, I find the IP addresses assigned to this VM by each virtual network's DHCP service.
+
+```
+[root@kworkhorse ~]# virsh net-dhcp-leases minikube-net
+ Expiry Time           MAC address         Protocol   IP address          Hostname   Client ID or DUID
+-----------------------------------------------------------------------------------------------------------
+ 2020-04-21 00:05:03   30:e0:ec:bf:64:8e   ipv4       192.168.39.174/24   minikube   01:30:e0:ec:bf:64:8e
+
+[root@kworkhorse ~]# 
+```
+
+
+```
+[root@kworkhorse ~]# virsh net-dhcp-leases default
+ Expiry Time           MAC address         Protocol   IP address           Hostname   Client ID or DUID
+------------------------------------------------------------------------------------------------------------
+ 2020-04-21 00:32:39   e8:94:3e:a6:a5:a7   ipv4       192.168.122.134/24   minikube   01:e8:94:3e:a6:a5:a7
+
+[root@kworkhorse ~]# 
+```
+
+Now I can ping both IP addresses from my computer:
+
+```
+[root@kworkhorse ~]# ping -c 2 192.168.39.174
+PING 192.168.39.174 (192.168.39.174) 56(84) bytes of data.
+64 bytes from 192.168.39.174: icmp_seq=1 ttl=64 time=0.188 ms
+64 bytes from 192.168.39.174: icmp_seq=2 ttl=64 time=0.276 ms
+
+--- 192.168.39.174 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1031ms
+rtt min/avg/max/mdev = 0.188/0.232/0.276/0.044 ms
+[root@kworkhorse ~]# 
+```
+
+```
+[root@kworkhorse ~]# ping -c 2 192.168.122.134
+PING 192.168.122.134 (192.168.122.134) 56(84) bytes of data.
+64 bytes from 192.168.122.134: icmp_seq=1 ttl=64 time=0.160 ms
+64 bytes from 192.168.122.134: icmp_seq=2 ttl=64 time=0.121 ms
+
+--- 192.168.122.134 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1042ms
+rtt min/avg/max/mdev = 0.121/0.140/0.160/0.019 ms
+[root@kworkhorse ~]# 
+```
+
+Minikube creates a RSA keypair in `.minikube/machines/minikube/`, which I can use to login to the VM as user `docker`. Actually the `minikube ssh` command also logs you in this VM using the user `docker`.
+
+```
+[kamran@kworkhorse ~]$ ssh -i .minikube/machines/minikube/id_rsa docker@192.168.39.174
+                         _             _            
+            _         _ ( )           ( )           
+  ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __  
+/' _ ` _ `\| |/' _ `\| || , <  ( ) ( )| '_`\  /'__`\
+| ( ) ( ) || || ( ) || || |\`\ | (_) || |_) )(  ___/
+(_) (_) (_)(_)(_) (_)(_)(_) (_)`\___/'(_,__/'`\____)
+
+$ 
+```
+
+
+I can also log in to the same VM using the other IP address:
+
+```
+[kamran@kworkhorse ~]$ ssh -i .minikube/machines/minikube/id_rsa docker@192.168.122.134
+The authenticity of host '192.168.122.134 (192.168.122.134)' can't be established.
+ECDSA key fingerprint is SHA256:5Fy2a0TdCmA4+UbR7zDYF0cMOsOjcU10hdrYFeYo4pQ.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '192.168.122.134' (ECDSA) to the list of known hosts.
+                         _             _            
+            _         _ ( )           ( )           
+  ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __  
+/' _ ` _ `\| |/' _ `\| || , <  ( ) ( )| '_`\  /'__`\
+| ( ) ( ) || || ( ) || || |\`\ | (_) || |_) )(  ___/
+(_) (_) (_)(_)(_) (_)(_)(_) (_)`\___/'(_,__/'`\____)
+
+$ 
+```
 
 
 
+
+
+
+The two files, where some of this information is written are:
+* ~/.minikube/profiles/minikube/config.json
+* ~/.minikube/machines/minikube/config.json
+ 
+
+```
+[kamran@kworkhorse ~]$ cat ~/.minikube/profiles/minikube/config.json
+{
+	"Name": "minikube",
+	"KeepContext": false,
+	"EmbedCerts": false,
+	"MinikubeISO": "https://storage.googleapis.com/minikube/iso/minikube-v1.9.0.iso",
+	"Memory": 3900,
+	"CPUs": 2,
+	"DiskSize": 20000,
+	"Driver": "kvm2",
+. . . 
+. . . 
+	},
+	"Nodes": [
+		{
+			"Name": "m01",
+			"IP": "192.168.39.174",
+			"Port": 8443,
+			"KubernetesVersion": "v1.18.0",
+			"ControlPlane": true,
+			"Worker": true
+		}
+	],
+	"Addons": {
+		"dashboard": true,
+		"default-storageclass": true,
+		"helm-tiller": true,
+		"metrics-server": true,
+		"storage-provisioner": true
+	},
+	"VerifyComponents": {
+		"apiserver": true,
+		"system_pods": true
+	}
+}
+[kamran@kworkhorse ~]$ 
+```
+
+
+```
+[kamran@kworkhorse ~]$ cat .minikube/machines/minikube/config.json 
+{
+    "ConfigVersion": 3,
+    "Driver": {
+        "IPAddress": "192.168.39.174",
+        "MachineName": "minikube",
+        "SSHUser": "docker",
+        "SSHPort": 22,
+        "SSHKeyPath": "/home/kamran/.minikube/machines/minikube/id_rsa",
+        "StorePath": "/home/kamran/.minikube",
+        "SwarmMaster": false,
+        "SwarmHost": "",
+        "SwarmDiscovery": "",
+        "Memory": 3900,
+        "CPU": 2,
+        "Network": "default",
+        "PrivateNetwork": "minikube-net",
+        "DiskSize": 20000,
+        "DiskPath": "/home/kamran/.minikube/machines/minikube/minikube.rawdisk",
+        "Boot2DockerURL": "file:///home/kamran/.minikube/cache/iso/minikube-v1.9.0.iso",
+        "ISO": "/home/kamran/.minikube/machines/minikube/boot2docker.iso",
+        "MAC": "e8:94:3e:a6:a5:a7",
+        "PrivateMAC": "30:e0:ec:bf:64:8e",
+        "GPU": false,
+        "Hidden": false,
+        "DevicesXML": "",
+        "ConnectionURI": "qemu:///system"
+    },
+    "DriverName": "kvm2",
+    "HostOptions": {
+        "Driver": "",
+        "Memory": 0,
+        "Disk": 0,
+        "EngineOptions": {
+            "ArbitraryFlags": null,
+            "Dns": null,
+            "GraphDir": "",
+            "Env": null,
+            "Ipv6": false,
+            "InsecureRegistry": [
+                "10.96.0.0/12"
+            ],
+. . . 
+        },
+. . . 
+        "AuthOptions": {
+            "CertDir": "/home/kamran/.minikube",
+            "CaCertPath": "/home/kamran/.minikube/certs/ca.pem",
+            "CaPrivateKeyPath": "/home/kamran/.minikube/certs/ca-key.pem",
+            "CaCertRemotePath": "",
+            "ServerCertPath": "/home/kamran/.minikube/machines/server.pem",
+            "ServerKeyPath": "/home/kamran/.minikube/machines/server-key.pem",
+            "ClientKeyPath": "/home/kamran/.minikube/certs/key.pem",
+            "ServerCertRemotePath": "",
+            "ServerKeyRemotePath": "",
+            "ClientCertPath": "/home/kamran/.minikube/certs/cert.pem",
+            "ServerCertSANs": null,
+            "StorePath": "/home/kamran/.minikube"
+        }
+    },
+    "Name": "minikube"
+}
+[kamran@kworkhorse ~]$ 
+```
 
 
 # Further reading:
