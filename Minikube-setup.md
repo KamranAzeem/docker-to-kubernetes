@@ -307,9 +307,11 @@ sudo: /etc/environment: No such file or directory
 
 ## Some limitations:
 
-* Acessing your applications over NodePort is horrible, and super painful. So, you will need to (you should) setup a LoadBalancer in minikube yourself, such as MetalLB. It is surprisingly easy to setup and easy to use! 
+* All Kubernetes clusters allow you to create services of `type: NodePort`, which helps you reach your service running inside the cluster, from outside the cluster. This is the cheapest solution. However, typing in long port numbers in the service's URL may feel cumbersome and frustrating. Therefore, you should setup a LoadBalancer in minikube yourself, such as MetalLB. It is surprisingly easy to setup and easy to use! 
 * Can't setup any HTTPS reverse proxy with LetsEncrypt's HTTP challenge because you will most probably be behind a home router/firewall. If you install Traefik with HTTPS support enabled, (without enabling LetsEncrypt), you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate is self signed, but at least you will get HTTPS URLs working. 
 * You can, though, use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS. 
+
+The solutions to these limitations are discussed later in this document.
 ------
 
 # How minikube works - the networking part
