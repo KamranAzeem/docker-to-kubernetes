@@ -399,7 +399,7 @@ You can now access your service as you would normally do through a LoadBalancer 
 [kamran@kworkhorse ~]$
 ```
 
-You will notice that the ClusterIP and the EXTERNAL-IP have the same IP address, as shown in the `kubectl get svc` command's output above. On a normal kubernetes cluster, these will be different, but on this cluster, they are same. There is a reason for that. Minikube uses these "EXTERNAL-IPs" as mere **labels**. On the host, it sets a route for this network range to be sent to the minikube VM's IP address. As soon as the traffic reaches the minikube VM, the iptables rules setup by the minikube's LoadBalancer controller takes the traffic and sends (DNAT) those packets to the actual pods. 
+You will notice that the **"ClusterIP"** and the **"EXTERNAL-IP"** have the same IP address, as shown in the `kubectl get svc` command's output above. On a normal kubernetes cluster, these will be different, but on this cluster, they are same. There is a reason for that. Minikube uses these **"EXTERNAL-IPs"** as mere **"labels"**. On the host, it sets a route for this network range to be sent to the minikube VM's IP address. As soon as the traffic reaches the minikube VM, the `iptables` rules setup by the minikube's LoadBalancer controller takes the traffic and sends (DNAT) those packets to the actual pods. 
 
 Here are the iptables rules from the minikube VM, after a service (`nginx`) has been setup as `type:LoadBalancer` :
 
