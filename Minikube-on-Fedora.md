@@ -297,7 +297,7 @@ kubeconfig: Configured
 [kamran@kworkhorse ~]$ 
 ```
 
-## Lets just verify host to minikube VM connectivity:
+## Verify host to minikube VM connectivity:
 
 Find the IP of your minikube machine. This is important for understanding, but we will talk about this in a moment.
 ```
@@ -494,7 +494,7 @@ You can now access your service as you would normally do through a LoadBalancer 
 # Some limitations of minikube:
 
 * The IP address of the minikube VM may change during subsequent `stop` , `start` operations. But if all you want to do is use `kubectl` to access the cluster inside that VM, then you should not be bothered, as the `minikube start` command updates your local `kube/config` file with the latest IP address of the minikube VM/API-server.
-* Minikube comes with a built-in reverse proxy (using nginx), but you still can't use LetsEncrypt's certificates while using their HTTP challenge. That is so, because you will most probably be behind a home router/firewall. If you install Traefik with HTTPS support enabled, but without enabling LetsEncrypt, you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate will be self signed, but at least you will get HTTPS URLs working. Though you can use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS. 
+* Minikube comes with a built-in ingress/reverse proxy (using nginx), but you still can't use LetsEncrypt's certificates while using their HTTP challenge. That is so, because you will most probably be behind a home router/firewall. If you install Traefik with HTTPS support enabled, but without enabling LetsEncrypt, you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate will be self signed, but at least you will get HTTPS URLs working. Though you can use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS. 
 
 
 # Further reading:
