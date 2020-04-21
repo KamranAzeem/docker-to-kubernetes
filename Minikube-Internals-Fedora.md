@@ -312,15 +312,123 @@ Below is a screenshot from a popular online subnet calculator.
 
 ## The minikube LoadBalancer:
 
-Iptables rules setup by `minikube tunnel`. It needs sudo, because it needs to add iptables rules for traffic redirection.
+MiniKube's LoadBalancer is activated when we run `minikube tunnel` command. As soon as the internal loadbalancer comes up, the service gets an EXTERNAL-IP address. Below is an example:
+
+Expose an existing deployment as `type:LoadBalancer`
+```
+[kamran@kworkhorse ~]$ kubectl expose deployment nginx --type=LoadBalancer --port 80
+service/nginx exposed
+
+
+[kamran@kworkhorse ~]$ kubectl get svc
+NAME         TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+kubernetes   ClusterIP      10.96.0.1       <none>        443/TCP        4d21h
+nginx        LoadBalancer   10.106.130.70   <pending>     80:32185/TCP   4s
+[kamran@kworkhorse ~]$ 
+```
+
+Notice that the `EXTERNAL-IP` is in `<pending>` state. 
+
+MiniKube's LoadBalancer is activated when we run `minikube tunnel` command. As soon as the internal loadbalancer comes up, the service gets an EXTERNAL-IP address.
+
+Remember that `minikube tunnel` command needs to run in a separate terminal, and it will ask you `sudo` password. This is because `minikube tunnel` runs as a process, and creates an additional network route on your work computer, so that all traffic destined to the kubernetes services network `10.96.0.0/12`, is sent to `192.168.39.174` - which is the IP address of the minikube VM.
+
+Here is the output of the `minikube tunnel` command:
+```
+[kamran@kworkhorse ~]$ minikube tunnel
+[sudo] password for kamran: 
+Status:	
+	machine: minikube
+	pid: 75840
+	route: 10.96.0.0/12 -> 192.168.39.174
+	minikube: Running
+	services: [nginx]
+    errors: 
+		minikube: no errors
+		router: no errors
+		loadbalancer emulator: no errors
+. . . 
+```
+(above goes on forever)
+
+
+Here is the routing table from my work-computer (the physical/KVM host) - *after* the `minikube tunnel` command is executed:
+
+```
+[root@kworkhorse ~]# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.0.1     0.0.0.0         UG    600    0        0 wlp2s0
+10.96.0.0       192.168.39.174  255.240.0.0     UG    0      0        0 virbr1   <------- This one!
+10.240.0.0      0.0.0.0         255.255.0.0     U     0      0        0 virbr2
+172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
+172.18.0.0      0.0.0.0         255.255.0.0     U     0      0        0 br-cc4817088a63
+192.168.0.0     0.0.0.0         255.255.255.0   U     600    0        0 wlp2s0
+192.168.39.0    0.0.0.0         255.255.255.0   U     0      0        0 virbr1
+192.168.122.0   0.0.0.0         255.255.255.0   U     0      0        0 virbr0
+[root@kworkhorse ~]# 
+```
+
+Back on the first terminal, if you check the list of services, you will see that your service has an EXTERNAL-IP address - `10.106.130.170`. 
+
+
+```
+[kamran@kworkhorse ~]$ kubectl  get svc
+NAME         TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)        AGE
+kubernetes   ClusterIP      10.96.0.1       <none>          443/TCP        5d
+nginx        LoadBalancer   10.106.130.70   10.106.130.70   80:32185/TCP   171m
+[kamran@kworkhorse ~]$ 
+```
+
+You can now access your service as you would normally do through a LoadBalancer IP, without using any fancy ports.
+
+```
+[kamran@kworkhorse ~]$ curl 10.106.130.70
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+. . . 
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+[kamran@kworkhorse ~]$
+```
+
+You will notice that the ClusterIP and the EXTERNAL-IP have the same IP address, as shown in the `kubectl get svc` command's output above. On a normal kubernetes cluster, these will be different, but on this cluster, they are same. There is a reason for that. Minikube uses these "EXTERNAL-IPs" as mere **labels**. On the host, it sets a route for this network range to be sent to the minikube VM's IP address. As soon as the traffic reaches the minikube VM, the iptables rules setup by the minikube's LoadBalancer controller takes the traffic and sends (DNAT) those packets to the actual pods. 
+
+Here are the iptables rules from the minikube VM, after a service (`nginx`) has been setup as `type:LoadBalancer` :
+
+```
+# iptables -L -t nat | grep nginx
+KUBE-MARK-MASQ  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
+KUBE-SVC-4N57TFCL4MD7ZTDA  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
+KUBE-MARK-DROP  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
+KUBE-MARK-MASQ  tcp  --  anywhere             anywhere             /* default/nginx: */ tcp dpt:32185
+KUBE-SVC-4N57TFCL4MD7ZTDA  tcp  --  anywhere             anywhere             /* default/nginx: */ tcp dpt:32185
+KUBE-MARK-MASQ  all  --  172.17.0.8           anywhere             /* default/nginx: */
+DNAT       tcp  --  anywhere             anywhere             /* default/nginx: */ tcp to:172.17.0.8:80
+KUBE-SVC-4N57TFCL4MD7ZTDA  tcp  --  anywhere             10.106.130.70        /* default/nginx: cluster IP */ tcp dpt:www
+KUBE-FW-4N57TFCL4MD7ZTDA  tcp  --  anywhere             10.106.130.70        /* default/nginx: loadbalancer IP */ tcp dpt:www
+KUBE-SEP-Z5JB7O4CUBWMYZUU  all  --  anywhere             anywhere             /* default/nginx: */
+# 
+```
+
+
+That's a lot of tricks!
+ 
 
 
 
 
+## Some minikube config files under your home directory:
 
+Some of the information about how the minikube VM is setup, and how the kubernetes cluster inside it is setup, can be found from the following files on your work-computer, in your home directory:
 
-
-The two files, where some of this information is written are:
 * ~/.minikube/profiles/minikube/config.json
 * ~/.minikube/machines/minikube/config.json
  
