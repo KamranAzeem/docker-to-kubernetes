@@ -297,7 +297,7 @@ kubeconfig: Configured
 [kamran@kworkhorse ~]$ 
 ```
 
-## Verify host to minikube VM connectivity:
+## Verify host-to-minikube connectivity:
 
 Find the IP of your minikube machine. This is important for understanding, but we will talk about this in a moment.
 ```
@@ -439,9 +439,9 @@ Notice that the `EXTERNAL-IP` is in `<pending>` state.
 
 MiniKube's LoadBalancer is activated when we run `minikube tunnel` command. As soon as the internal loadbalancer comes up, the service gets an EXTERNAL-IP address.
 
-Remember that `minikube tunnel` command needs to run in a separate terminal, and it will ask you sudo password, as it needs to do some `iptables` magic on your work-computer.
+Remember that `minikube tunnel` command needs to run in a separate terminal, and it will ask you `sudo` password. This is because `minikube tunnel` runs as a process, and creates an additional network route on your work computer, so that all traffic destined to `10.96.0.0/12` network is sent to `192.168.39.174` - which is the IP address of the minikube VM.
 
-Here is what it looks like:
+Here is the output of the `minikube tunnel` command:
 ```
 [kamran@kworkhorse ~]$ minikube tunnel
 [sudo] password for kamran: 
@@ -459,6 +459,23 @@ Status:
 ```
 (above goes on forever)
 
+
+Here is the routing table from my work-computer (the physical/KVM host) - *after* the `minikube tunnel` command is executed:
+
+```
+[root@kworkhorse ~]# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.0.1     0.0.0.0         UG    600    0        0 wlp2s0
+10.96.0.0       192.168.39.174  255.240.0.0     UG    0      0        0 virbr1   <------- This one!
+10.240.0.0      0.0.0.0         255.255.0.0     U     0      0        0 virbr2
+172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
+172.18.0.0      0.0.0.0         255.255.0.0     U     0      0        0 br-cc4817088a63
+192.168.0.0     0.0.0.0         255.255.255.0   U     600    0        0 wlp2s0
+192.168.39.0    0.0.0.0         255.255.255.0   U     0      0        0 virbr1
+192.168.122.0   0.0.0.0         255.255.255.0   U     0      0        0 virbr0
+[root@kworkhorse ~]# 
+```
 
 Back on the first terminal, if you check the list of services, you will see that your service has an EXTERNAL-IP address - `10.106.130.170`. 
 
@@ -489,6 +506,9 @@ You can now access your service as you would normally do through a LoadBalancer 
 </html>
 [kamran@kworkhorse ~]$
 ```
+
+Hurray! It works!
+
 
 
 # Some limitations of minikube:
