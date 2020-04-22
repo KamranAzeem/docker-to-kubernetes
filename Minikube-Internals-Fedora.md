@@ -404,6 +404,16 @@ You will notice that the **"ClusterIP"** and the **"EXTERNAL-IP"** have the same
 Here are the iptables rules from the minikube VM, after a service (`nginx`) has been setup as `type:LoadBalancer` :
 
 ```
+[kamran@kworkhorse ~]$ minikube ssh
+                         _             _            
+            _         _ ( )           ( )           
+  ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __  
+/' _ ` _ `\| |/' _ `\| || , <  ( ) ( )| '_`\  /'__`\
+| ( ) ( ) || || ( ) || || |\`\ | (_) || |_) )(  ___/
+(_) (_) (_)(_)(_) (_)(_)(_) (_)`\___/'(_,__/'`\____)
+
+$ sudo -i
+
 # iptables -L -t nat | grep nginx
 KUBE-MARK-MASQ  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
 KUBE-SVC-4N57TFCL4MD7ZTDA  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
