@@ -510,11 +510,409 @@ You can now access your service as you would normally do through a LoadBalancer 
 Hurray! It works!
 
 
+# Use minikube's built-in ingress controller:
+
+You can use minikube's built-in ingress controller, which is based on nginx. It is a minikube add, so first, you will need to enable it.
+
+```
+[kamran@kworkhorse ~]$ minikube addons enable ingress
+🌟  The 'ingress' addon is enabled
+[kamran@kworkhorse ~]$ 
+```
+
+
+Verify that the NGINX Ingress controller is running in the `kube-system` namespace:
+
+```
+[kamran@kworkhorse ~]$ kubectl get pods -n kube-system
+NAME                                        READY   STATUS    RESTARTS   AGE
+coredns-66bff467f8-dww5p                    1/1     Running   3          5d13h
+coredns-66bff467f8-hnbxp                    1/1     Running   3          5d13h
+etcd-minikube                               1/1     Running   2          5d13h
+kube-apiserver-minikube                     1/1     Running   2          5d13h
+kube-controller-manager-minikube            1/1     Running   2          5d13h
+kube-proxy-hdc9r                            1/1     Running   2          5d13h
+kube-scheduler-minikube                     1/1     Running   2          5d13h
+metrics-server-7bc6d75975-kp4kp             1/1     Running   3          5d12h
+nginx-ingress-controller-6d57c87cb9-tbnqt   0/1     Running   0          58s      <----- This one!
+storage-provisioner                         1/1     Running   4          5d13h
+tiller-deploy-58bf6f4995-nvwc6              1/1     Running   2          5d12h
+[kamran@kworkhorse ~]$ 
+```
+
+
+Create a deployment. Lets use `praqma/network-multitool` to run a new deployment.
+
+```
+[kamran@kworkhorse minikube]$ cat 01-multitool-deployment.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multitool
+  labels:
+    app: multitool
+spec:
+  selector:
+    matchLabels:
+      app: multitool
+  template:
+    metadata:
+      labels:
+        app: multitool
+    spec:
+      containers:
+      - image: praqma/network-multitool
+        name: multitool
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          limits:
+            cpu: 10m
+            memory: 50Mi
+          requests:
+            cpu: 5m
+            memory: 10Mi
+[kamran@kworkhorse minikube]$ 
+```
+
+```
+[kamran@kworkhorse minikube]$ kubectl apply -f 01-multitool-deployment.yaml 
+deployment.apps/multitool created
+[kamran@kworkhorse minikube]$ 
+```
+
+```
+[kamran@kworkhorse minikube]$ kubectl get pods
+NAME                         READY   STATUS    RESTARTS   AGE
+multitool-5dd8699c59-z5kdn   1/1     Running   0          110s
+nginx-745b4df97d-wjrtr       1/1     Running   0          38h
+[kamran@kworkhorse minikube]$
+```
+
+Expose this deployment as a service:
+
+```
+[kamran@kworkhorse minikube]$ kubectl expose deployment multitool --type ClusterIP --port 80
+service/multitool exposed
+[kamran@kworkhorse minikube]$ kubectl get svc 
+NAME         TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
+kubernetes   ClusterIP      10.96.0.1        <none>          443/TCP        5d13h
+multitool    ClusterIP      10.102.171.156   <none>          80/TCP         20s
+nginx        LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP   15h
+[kamran@kworkhorse minikube]$ 
+```
+
+Or, you can use the following file to create the same service (for multitool):
+
+```
+[kamran@kworkhorse minikube]$ cat 02-multitool-service.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: multitool
+  name: multitool
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: multitool
+  type: ClusterIP
+[kamran@kworkhorse minikube]$ 
+```
+
+
+Create an ingress for this service:
+
+```
+[kamran@kworkhorse minikube]$ cat 03-multitool-ingress.yaml 
+apiVersion: networking.k8s.io/v1beta1 # for versions before 1.14 use extensions/v1beta1
+kind: Ingress
+metadata:
+  name: multitool-ingress
+spec:
+  rules:
+  - host: multitool.example.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: multitool
+          servicePort: 80
+[kamran@kworkhorse minikube]$ 
+```
+
+```
+[kamran@kworkhorse minikube]$ kubectl apply -f  multitool-ingress.yaml 
+ingress.networking.k8s.io/multitool-ingress created
+[kamran@kworkhorse minikube]$ 
+```
+
+Verify that it is created:
+```
+[kamran@kworkhorse minikube]$ kubectl get ingress
+NAME                CLASS    HOSTS                   ADDRESS          PORTS   AGE
+multitool-ingress   <none>   multitool.example.com   192.168.39.174   80      17s
+[kamran@kworkhorse minikube]$ 
+```
+
+Now, update your `/etc/hosts` and point `multitool.example.com` to the ip address being shown under the ADDRESS column. This address is actually the IP address of your minikube VM.
+
+```
+[root@kworkhorse ~]# cat /etc/hosts 
+127.0.0.1  localhost localhost.localdomain
+
+# minikube ingress for multitool.example.com
+192.168.39.174	multitool.example.com
+[root@kworkhorse ~]# 
+```
+
+The moment of truth. Access your multitool service from the host / your work computer:
+```
+[kamran@kworkhorse ~]$ curl multitool.example.com
+Praqma Network MultiTool (with NGINX) - multitool-5dd8699c59-z5kdn - 172.17.0.10/16
+[kamran@kworkhorse ~]$ 
+```
+
+It works!
+
+
+## Run a `tomcat` container:
+Tomcat runs on port 8080, so it will be a good example to see how a service running on a different port can be accessed through the ingress `tomcat.example.com` , using minikube's built-in ingress controller. 
+
+For this example, I have created just one file, which contains all the three objects. i.e. `deployment`, `service`, `ingress`. Also, I am pulling a sample `.war` file into the tomcat container, so I have something to show.
+
+Here is the file:
+
+```
+[kamran@kworkhorse minikube]$ cat tomcat-deploymet-service-ingress.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tomcat
+  labels:
+    app: tomcat
+spec:
+  selector:
+    matchLabels:
+      app: tomcat
+  template:
+    metadata:
+      labels:
+        app: tomcat
+    spec:
+      containers:
+      - name: tomcat
+        image: tomcat:9
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "50m"
+          requests:
+            cpu: 50m
+        volumeMounts:
+        - name: web-content-dir
+          mountPath: /usr/local/tomcat/webapps/
+      initContainers:
+      - name: multitool
+        image: praqma/network-multitool
+        workingDir: /web-content
+        command:
+        - wget
+        - "-O"
+        - "/web-content/sample.war"
+        - https://tomcat.apache.org/tomcat-9.0-doc/appdev/sample/sample.war
+        resources:
+          limits:
+            cpu: "20m"
+          requests:
+            cpu: 20m
+        volumeMounts:
+        - name: web-content-dir
+          mountPath: /web-content
+      volumes:
+      - name: web-content-dir
+        emptyDir: {}
+    
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: default
+  name: tomcat
+  labels:
+    app: tomcat
+spec:
+  ports:
+    - port: 8080
+  selector:
+    app: tomcat
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1beta1 # for versions before 1.14 use extensions/v1beta1
+kind: Ingress
+metadata:
+  name: tomcat-ingress
+  labels:
+    app: tomcat
+spec:
+  rules:
+  - host: tomcat.example.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: tomcat
+          servicePort: 8080
+
+[kamran@kworkhorse minikube]$ 
+```
+
+Lets create the deployment, service and ingress for tomcat:
+
+```
+[kamran@kworkhorse minikube]$ kubectl apply -f tomcat-deploymet-service-ingress.yaml 
+deployment.apps/tomcat created
+service/tomcat created
+ingress.networking.k8s.io/tomcat-ingress created
+[kamran@kworkhorse minikube]$ 
+```
+
+Verify that the objects are created:
+
+```
+[kamran@kworkhorse minikube]$ kubectl get deployments,services,ingress
+NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/multitool   1/1     1            1           43m
+deployment.apps/nginx       1/1     1            1           39h
+deployment.apps/tomcat      1/1     1            1           94s
+
+NAME                 TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
+service/kubernetes   ClusterIP      10.96.0.1        <none>          443/TCP        5d14h
+service/multitool    ClusterIP      10.102.171.156   <none>          80/TCP         38m
+service/nginx        LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP   16h
+service/tomcat       ClusterIP      10.101.172.146   <none>          8080/TCP       94s
+
+NAME                                   CLASS    HOSTS                   ADDRESS          PORTS   AGE
+ingress.extensions/multitool-ingress   <none>   multitool.example.com   192.168.39.174   80      33m
+ingress.extensions/tomcat-ingress      <none>   tomcat.example.com      192.168.39.174   80      94s
+[kamran@kworkhorse minikube]$ 
+```
+**Note:** The `nginx` service of `type:LoadBalancer` showing up in the output above, has nothing to do with minikube's built-in ingress controller (which is also nginx based). The above nginx deployment and service is something we created earlier in this document.
+
+Alright, so we have the three objects related to tomcat. Notice that the ingress `tomcat.example.com` is also using the same IP address as the ingress for multitool, and that IP address is the IP address of the minikube VM. This is OK. That is exactly how it is supposed to look like.
+
+Lets see if we can access it from our host computer or not. To be able to do that, first we have to update `/etc/hosts` file and setup a host entry - as root (or sudo).
+
+```
+[root@kworkhorse ~]# cat /etc/hosts 
+127.0.0.1  localhost localhost.localdomain
+
+# minikube ingresses:
+192.168.39.174	multitool.example.com
+192.168.39.174	tomcat.example.com
+[root@kworkhorse ~]# 
+```
+**Note:** If the IP address is same for two hosts/URLs, you can use write them together in a single line.
+
+Lets access tomcat from the host:
+
+```
+[kamran@kworkhorse minikube]$ curl tomcat.example.com
+<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>[kamran@kworkhorse minikube]$
+```
+
+Hurray! We can reach `tomcat.example.com` ! 
+
+If you are wondering, why are we celebrating by seeing a `404`, and some garbage output displayed on the screen? Well, the output is actually *coming from Tomcat*, which simply states that it could not find any applications configured in it, or it will not reveal that any application exists. It expects you to write an index file, which users can use to reach respective applications, or simply use the application's URL directly. So if we see the output above, it means our ingress for `tomcat.example.com` is working and we *are* reaching the backend tomcat service. 
+
+Remember, I copied a `sample.war` file in tomcat. That was to test tomcat using `http://tomcat.example.com/sample` . So lets do that.
+
+```
+[kamran@kworkhorse minikube]$ curl tomcat.example.com/sample
+```
+
+```
+[kamran@kworkhorse minikube]$ curl -L tomcat.example.com/sample
+<html>
+<head>
+<title>Sample "Hello, World" Application</title>
+</head>
+<body bgcolor=white>
+
+<table border="0">
+<tr>
+<td>
+<img src="images/tomcat.gif">
+</td>
+<td>
+<h1>Sample "Hello, World" Application</h1>
+<p>This is the home page for a sample application used to illustrate the
+source directory organization of a web application utilizing the principles
+outlined in the Application Developer's Guide.
+</td>
+</tr>
+</table>
+
+<p>To prove that they work, you can execute either of the following links:
+<ul>
+<li>To a <a href="hello.jsp">JSP page</a>.
+<li>To a <a href="hello">servlet</a>.
+</ul>
+
+</body>
+</html>
+[kamran@kworkhorse minikube]$ 
+```
+
+Here is a screenshot of the same from a browser:
+
+| ![images/tomcat-sample.png](images/tomcat-sample.png) |
+| ----------------------------------------------------- |
+
+
+
+## Warning about an annotation in minikube ingress example:
+
+If you try to access `tomcat.example.com/sample` , and you see the output below, then you probably have used some annotations incorrectly.
+
+```
+[kamran@kworkhorse minikube]$ curl tomcat.example.com/sample
+<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>[kamran@kworkhorse minikube]$ 
+[kamran@kworkhorse minikube]$ 
+```
+
+
+The above shows that `tomcat.example.com/sample` in unreachable from my host computer. I am actually being redirected to the root path `/`. If you used the annotation suggested in the example described at [https://kubernetes.io/docs/tasks/access-application-cluster/ingress-minikube/](https://kubernetes.io/docs/tasks/access-application-cluster/ingress-minikube/), then this is the cause of the problem. 
+
+The problematic annotation in the definition of the ingress object is this one:
+
+```
+. . . 
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+. . . 
+``` 
+The above annotation forces the terget to be re-written, which messes up with the URL we are trying to reach, and instead of reaching `/sample` on the tomcat service, we are redirected to `/` . To fix this, simply remove this annotation section from your yaml file. And re-deploy the ingress-object. 
+
+
+The nginx ingress controller's rewrite rules are explained here: [https://kubernetes.github.io/ingress-nginx/examples/rewrite/(https://kubernetes.github.io/ingress-nginx/examples/rewrite/)
+
 
 # Some limitations of minikube:
 
 * The IP address of the minikube VM may change during subsequent `stop` , `start` operations. But if all you want to do is use `kubectl` to access the cluster inside that VM, then you should not be bothered, as the `minikube start` command updates your local `kube/config` file with the latest IP address of the minikube VM/API-server.
-* Minikube comes with a built-in ingress/reverse proxy (using nginx), but you still can't use LetsEncrypt's certificates while using their HTTP challenge. That is so, because you will most probably be behind a home router/firewall. If you install Traefik with HTTPS support enabled, but without enabling LetsEncrypt, you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate will be self signed, but at least you will get HTTPS URLs working. Though you can use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS. 
+* Minikube comes with a built-in ingress/reverse proxy (using nginx), but you still can't use LetsEncrypt's certificates while using the LetsEncrypt's HTTP challenge. The reason is that you will most probably be behind a home router/firewall, and HTTP challenge will not work unless you go through additional steps, which involve modifying forwarding rules of your home router. You can install Traefik with HTTPS support enabled, but without enabling LetsEncrypt. This way you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate will be self signed, but at least you will get HTTPS URLs working. Though you can use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS.
+
+# Additional fun stuff:
+* If you don't want to use minikube's built-in LoadBalancer, you can setup your own, such as **MetalLB**. 
+* If you don't want to use minikube's built-in Ingress Controller, you can use your own, such as **Traefik**. 
 
 
 # Further reading:
@@ -522,6 +920,7 @@ Hurray! It works!
 * [https://kubernetes.io/docs/setup/learning-environment/minikube/](https://kubernetes.io/docs/setup/learning-environment/minikube/)
 * [https://docs.gitlab.com/charts/development/minikube/](https://docs.gitlab.com/charts/development/minikube/)
 * [https://minikube.sigs.k8s.io/docs/handbook/](https://minikube.sigs.k8s.io/docs/handbook/)
+* [https://kubernetes.io/docs/tasks/access-application-cluster/ingress-minikube/](https://kubernetes.io/docs/tasks/access-application-cluster/ingress-minikube/)
 
 
 
