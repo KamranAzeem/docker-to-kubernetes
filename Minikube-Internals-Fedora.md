@@ -288,7 +288,7 @@ $
 ```
 
 ## The service network (ClusterIPs):
-Minikube uses `10.96.0.0/12` address range for the services it creates. It allows XXXX amount of host IPAddresses, essentially meaning that it supports XXXX amount of cluster services (ClusterIPs). The usable IP address range for this network is: `10.96.0.1 - 10.111.255.254`. That is why you see all these funny looking ClusterIP addresses like `10.106.130.70`), which - visually - do not resemble `10.96.x.y`! But they are from the same network IP range!
+Minikube uses `10.96.0.0/12` address range for the services it creates. It allows 1,048,574 number of host IPAddresses (about one million), essentially meaning that it supports 1,048,574 amount of cluster services (ClusterIPs). The usable IP address range for this network is: `10.96.0.1 - 10.111.255.254`. That is why you see all these funny looking ClusterIP addresses like `10.106.130.70`), which - visually - do not resemble `10.96.x.y`! But they are from the same network IP range!
 
 ```
 [kamran@kworkhorse ~]$ kubectl --all-namespaces=true get svc

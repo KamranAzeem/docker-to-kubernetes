@@ -337,18 +337,10 @@ sudo: /etc/environment: No such file or directory
 (Ignore the error message about `/etc/environment`) 
 
 
-## Setup `/etc/hosts` on host computer:
-On the host computer, add an entry for minikube in the `/etc/hosts` file.
+## About setting up `/etc/hosts` with minikube's IP on host computer:
+Some people might be tempted to update minikube's IP address in /etc/hosts file, which is actually useless exercise. The reason is that IP address of the minikube VM will keep changing, and you will keep updating the `/etc/hosts` file. Essentially, you really not gain any advantage of putting this IP in `/etc/hosts`. 
 
-```
-[root@kworkhorse ~]# head /etc/hosts
-127.0.0.1  localhost localhost.localdomain
-
-# minikube VM
-192.168.39.174	minikube
-[root@kworkhorse ~]#
-```
-
+In short, don't bother.
 
 ## Use kubectl to interact with kuberntes cluster running in minikube:
 Now we have minikube installed. It is time to start using it. We already have kubectl installed on the host computer, and minikube has already created a `kube/config` for us. Minikube also sets the context for kubectl to use minikube cluster. So if we run `kubectl` commands against this cluster, the commands will work. 
