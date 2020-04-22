@@ -638,7 +638,7 @@ spec:
 ```
 
 ```
-[kamran@kworkhorse minikube]$ kubectl apply -f  multitool-ingress.yaml 
+[kamran@kworkhorse minikube]$ kubectl apply -f  03-multitool-ingress.yaml 
 ingress.networking.k8s.io/multitool-ingress created
 [kamran@kworkhorse minikube]$ 
 ```
