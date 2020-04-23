@@ -876,7 +876,7 @@ If you try to access `tomcat.example.com/sample` , and you see the output below,
 
 ```
 [kamran@kworkhorse minikube]$ curl tomcat.example.com/sample
-<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>[kamran@kworkhorse minikube]$ 
+<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>
 [kamran@kworkhorse minikube]$ 
 ```
 
@@ -891,16 +891,352 @@ The problematic annotation in the definition of the ingress object is this one:
     nginx.ingress.kubernetes.io/rewrite-target: /$1
 . . . 
 ``` 
-The above annotation forces the terget to be re-written, which messes up with the URL we are trying to reach, and instead of reaching `/sample` on the tomcat service, we are redirected to `/` . To fix this, simply remove this annotation section from your yaml file. And re-deploy the ingress-object. 
+
+The above annotation forces the target to be re-written, which messes up with the URL we are trying to reach, and instead of reaching `/sample` on the tomcat service, we are redirected to `/` . To fix this, simply remove this annotation section from your yaml file. And re-deploy the ingress-object. 
 
 
-The nginx ingress controller's rewrite rules are explained here: [https://kubernetes.github.io/ingress-nginx/examples/rewrite/(https://kubernetes.github.io/ingress-nginx/examples/rewrite/)
+The nginx ingress controller's rewrite rules are explained here: [https://kubernetes.github.io/ingress-nginx/examples/rewrite/](https://kubernetes.github.io/ingress-nginx/examples/rewrite/)
+
+# As a developer - How to update `/etc/hosts` easily:
+Updating `/etc/hosts` file is sometimes cumbersome, because each time you need to do: `sudo vi /etc/hosts` , then type your password, and so on. There are two ways to make your life easy.
+
+## Method 1: Run a "dedicated"/"separate" terminal as root all the time:
+This is my practice as well. At any given time, I usually have 5-7 text terminals tabs open in the same terminal window; and the first one is always running is `root`. I always login as `root` on the first terminal tab using `sudo -i` and typing in my password once. After that whenever any operation on my OS requires `root` privileges, I simply go to that tab and run that over there. Simple and easy. Here is what is looks like:
+
+
+| ![images/text-terminal.png](images/text-terminal.png) |
+| ----------------------------------------------------- |
+
+
+## Method 2: Adjust permissions of `/etc/hosts` so it is writable by you:
+Some people may raise eyebrows when they read this, but this is actually safe to do. 
+
+The file `/etc/host` has following ownership and permissions:
+```
+[root@kworkhorse ~]# ls -l /etc/hosts
+-rw-r--r-- 1 root root 660 Apr 22 13:19 /etc/hosts
+[root@kworkhorse ~]#
+```
+The above output means that the user `root` is the owner of this file. Also there is (sort of) group ownership of the group `root` on this file. From permissions perspective, the file is readable and writable by the owner (`root`) . The file is readable (read-only) by the members of group `root` , and the file is read-only for the "others" ("rest of the world").   
+
+What you can do is, change the ownership of the file `/etc/hosts` to your user, and at the same time allow the members of the group `root` to be able to write to this file. Doing it this way, will enable you to modify this file as a regular user "at will", without needing to type `sudo` all the time, resulting in your development work-flow becoming faster. After this change, you can even keep this file open in your IDE/text-editor in a separate dedicated tab, and whenever you want to make a change to it, you simply make the changes in it, and just save the file. 
+
+I don't see any security problem in doing this. It is a safe operation. If anyone says otherwise, come talk to me. :)
+
+Here is how you do it - once as `sudo` / `root`.
+
+First, make a copy of the file:
+```
+[kamran@kworkhorse ~]$ sudo -i
+[sudo] password for kamran:
+
+[root@kworkhorse ~]# cp /etc/hosts /etc/hosts.orig
+```
+
+Then change the ownership and permissions of this file:
+```
+[root@kworkhorse ~]# chown kamran:root /etc/hosts
+[root@kworkhorse ~]# chmod g+w /etc/hosts
+```
+
+Verify the changes:
+```
+[root@kworkhorse ~]# ls -l /etc/hosts
+-rw-rw-r-- 1 kamran root 660 Apr 22 13:19 /etc/hosts
+[root@kworkhorse ~]# 
+```
+
+Congratulations! Now open this file in your IDE (as regular user). I sometimes keep it open in [geany](https://geany.org/) as my first tab. Here is how it looks like:
+
+| ![images/etc-hosts-in-ide.png](images/etc-hosts-in-ide.png) |
+| ----------------------------------------------------------- |
+
+Notice that I have multiple files open in my IDE, the first one is `/etc/hosts` , everything as normal user `kamran`. 
+
+**Note:** In case you ever mess with this file, you can always fill it with fresh entries. The **only line** that must always be there in this file, (as a first line), is the following. So everything else in this file can go away, but the line below must remain intact.
+```
+127.0.0.1   localhost   localhost.localdomain
+```
+
+## Warning about the `ingress-dns` addon:
+There is an `ingress-dns` addon available with minikube. You will see it in **disabled** state in the list when you type in `minikube addons list`
+
+```
+[kamran@kworkhorse ~]$ minikube addons list
+|-----------------------------|----------|--------------|
+|         ADDON NAME          | PROFILE  |    STATUS    |
+|-----------------------------|----------|--------------|
+| dashboard                   | minikube | enabled ✅   |
+| default-storageclass        | minikube | enabled ✅   |
+| efk                         | minikube | disabled     |
+| freshpod                    | minikube | disabled     |
+| gvisor                      | minikube | disabled     |
+| helm-tiller                 | minikube | enabled ✅   |
+| ingress                     | minikube | enabled ✅   |
+| ingress-dns                 | minikube | disabled     |
+| istio                       | minikube | disabled     |
+| istio-provisioner           | minikube | disabled     |
+| logviewer                   | minikube | disabled     |
+| metrics-server              | minikube | enabled ✅   |
+| nvidia-driver-installer     | minikube | disabled     |
+| nvidia-gpu-device-plugin    | minikube | disabled     |
+| registry                    | minikube | disabled     |
+| registry-aliases            | minikube | disabled     |
+| registry-creds              | minikube | disabled     |
+| storage-provisioner         | minikube | enabled ✅   |
+| storage-provisioner-gluster | minikube | disabled     |
+|-----------------------------|----------|--------------|
+[kamran@kworkhorse ~]$ 
+```
+
+You may be tempted to enable it, but it is actually not that useful. It is an attempt/hack by someone to solve the problem of updating `/etc/hosts` described in the previous section. The details of this add-on are here: [https://github.com/kubernetes/minikube/tree/master/deploy/addons/ingress-dns](https://github.com/kubernetes/minikube/tree/master/deploy/addons/ingress-dns)
+
+The approach/idea is good, but it is more hack-ey and more demanding/difficult from the developer's perspective. It actually sets up a small DNS service/resolver within the minikube kubernetes cluster, and any service you create with an ingress, gets a DNS entry in that small DNS server/resolver. Then you configure your host computer to use this DNS resolver in addition to whatever DNS resolver you may be using.  
+
+A special part of host configuration requires the IP address of the minikube VM to be configured in a certain file (`/etc/resolvconf/resolv.conf.d/base`) - on the host, and that is where the problem lies. The minikube VM may change it's IP address at any moment. This means you will need to update this special file every time minikube changes it's IP address, and the minikube boot-up process does not update this file automatically. So you are stuck with modifying even more files, at even more locations, which results in more moving parts, and lengthier trouble-shooting if something is not working. 
+
+So, until miniube's `ingress-dns` add-on brings auto-update of the host configuration files, it is best to not use it.
+ 
+
+# Using Helm on your minikube kubernetes cluster:
+If you want to develop helm charts, or just want to use existing ones, you will need **`helm`** on your local work computer (the host). 
+
+## Helm version 3:
+Helm 3.2 is the latest at the time this document was written. To be able to use Helm , you simply install it for your operating system using the instructions from this URL: [https://helm.sh/docs/intro/install/](https://helm.sh/docs/intro/install/) . 
+
+
+Basically it is the following simple steps:
+* Download your desired version
+* Unpack it (`tar -zxf filename.tar.gz`)
+* Find the helm binary in the unpacked directory (`linux-amd64`), and move it to `/usr/local/bin`
+
+
+Perform these steps as user `root` or use `sudo`:
+```
+[root@kworkhorse ~]# curl -LO https://get.helm.sh/helm-v3.2.0-linux-amd64.tar.gz
+
+[root@kworkhorse ~]# tar xzf helm-v3.2.0-linux-amd64.tar.gz
+
+[root@kworkhorse ~]# mv linux-amd64/helm /usr/local/bin/
+```
+
+Check helm version at any given time:
+```
+[kamran@kworkhorse ~]$ helm version
+version.BuildInfo{Version:"v3.2.0", GitCommit:"e11b7ce3b12db2941e90399e874513fbd24bcb71", GitTreeState:"clean", GoVersion:"go1.13.10"}
+[kamran@kworkhorse ~]$ 
+```
+
+That's it, you are good to start using helm. But, "What about tiller?". Well, Tiller has been removed in Helm version 3.x! You don't need tiller in your cluster anymore, if you are using helm v-3.x . See details here: [https://helm.sh/blog/helm-3-released/](https://helm.sh/blog/helm-3-released/) . 
+
+You don't need the "helm-tiller" add-on in your minikube cluster, if you want to use helm 3.
+
+## Helm version 2:
+In case you want to use helm 2.x, for whatever reason, you need **helm 2.x** binary on your local computer, and it's server component **tiller** installed inside the kubernetes cluster. 
+
+Installing `helm` v2 on your local computer is done in the same way as described above, except that the tarball will be of `v2` instead of `v3`.
+
+Basically it is the following simple steps:
+* Download your desired version
+* Unpack it (`tar -zxf filename.tar.gz`)
+* Find the helm binary in the unpacked directory (`linux-amd64`), and move it to `/usr/local/bin`
+
+
+Perform these steps as user `root` or use `sudo`:
+```
+[root@kworkhorse ~]# curl -LO https://get.helm.sh/helm-v2.16.6-linux-amd64.tar.gz
+
+[root@kworkhorse ~]# tar xzf helm-v2.16.6-linux-amd64.tar.gz
+
+[root@kworkhorse ~]# mv linux-amd64/helm /usr/local/bin/
+```
+
+[kamran@kworkhorse ~]$ helm version
+Client: &version.Version{SemVer:"v2.16.6", GitCommit:"dd2e5695da88625b190e6b22e9542550ab503a47", GitTreeState:"clean"}
+Server: &version.Version{SemVer:"v2.16.3", GitCommit:"1ee0254c86d4ed6887327dabed7aa7da29d7eb0d", GitTreeState:"clean"}
+[kamran@kworkhorse ~]$ 
+
+
+Then, to install `tiller` on the minikube cluster, simply install the `helm-tiller` add-on, and you are good to go.
+
+```
+[kamran@kworkhorse ~]$ minikube addons enable helm-tiller
+🌟  The 'helm-tiller' addon is enabled
+[kamran@kworkhorse ~]$ 
+```
+
+## Install an example helm chart:
+**Note:** Helm v3 is used in the commands below.
+
+Before you are able to actually use helm to deploy an existing helm chart, you will need to add it's repository URL.
+
+```
+[kamran@kworkhorse ~]$ helm repo add stable https://kubernetes-charts.storage.googleapis.com
+"stable" has been added to your repositories
+[kamran@kworkhorse ~]$ 
+```
+
+Then you can list all available charts/packages in a particular repository, or search for a particular one.
+
+``` 
+[kamran@kworkhorse ~]$ helm search repo stable
+NAME                                 	CHART VERSION	APP VERSION            	DESCRIPTION                                       
+stable/acs-engine-autoscaler         	2.2.2        	2.1.1                  	DEPRECATED Scales worker nodes within agent pools 
+stable/aerospike                     	0.3.2        	v4.5.0.5               	A Helm chart for Aerospike in Kubernetes          
+stable/airflow                       	6.7.2        	1.10.4                 	Airflow is a platform to programmatically autho...
+stable/ambassador                    	5.3.1        	0.86.1                 	A Helm chart for Datawire Ambassador              
+stable/anchore-engine                	1.5.2        	0.7.0                  	Anchore container analysis and policy evaluatio...
+stable/apm-server                    	2.1.5        	7.0.0                  	The server receives data from the Elastic APM a...
+stable/ark                           	4.2.2        	0.10.2                 	DEPRECATED A Helm chart for ark                   
+stable/artifactory                   	7.3.1        	6.1.0                  	DEPRECATED Universal Repository Manager support...
+. . . 
+. . . 
+stable/zeppelin                      	1.1.0        	0.7.2                  	Web-based notebook that enables data-driven, in...
+stable/zetcd                         	0.1.9        	0.0.3                  	CoreOS zetcd Helm chart for Kubernetes            
+[kamran@kworkhorse ~]$ 
+```
+
+Or:
+
+```
+[kamran@kworkhorse ~]$ helm search repo postgres
+NAME                               	CHART VERSION	APP VERSION	DESCRIPTION                                       
+stable/postgresql                  	8.6.4        	11.7.0     	DEPRECATED Chart for PostgreSQL, an object-rela...
+stable/prometheus-postgres-exporter	1.3.0        	0.8.0      	A Helm chart for prometheus postgres-exporter     
+stable/pgadmin                     	1.2.2        	4.18.0     	pgAdmin is a web based administration tool for ...
+stable/stolon                      	1.5.9        	0.13.0     	Stolon - PostgreSQL cloud native High Availabil...
+stable/gcloud-sqlproxy             	0.6.1        	1.11       	DEPRECATED Google Cloud SQL Proxy                 
+[kamran@kworkhorse ~]$ 
+```
+
+
+Lets install wordpress helm chart. First, we need to check if it exists:
+
+```
+[kamran@kworkhorse ~]$ helm search repo wordpress
+NAME            	CHART VERSION	APP VERSION	DESCRIPTION                                       
+stable/wordpress	9.0.3        	5.3.2      	DEPRECATED Web publishing platform for building...
+[kamran@kworkhorse ~]$ 
+```
+
+We see that there is a chart, but it is deprecated. Bitnami is maintaining the latest wordpress helm chart. So we add Bitnami's helm repo.
+
+```
+[kamran@kworkhorse ~]$ helm repo add bitnami https://charts.bitnami.com/bitnami
+"bitnami" has been added to your repositories
+[kamran@kworkhorse ~]$ 
+```
+
+Then, we search for, and install the wordpress chart from bitnami:
+
+```
+[kamran@kworkhorse ~]$ helm search repo bitnami/wordpress
+NAME             	CHART VERSION	APP VERSION	DESCRIPTION                                       
+bitnami/wordpress	9.1.9        	5.4.0      	Web publishing platform for building blogs and ...
+[kamran@kworkhorse ~]$ 
+```
+
+Download/Install the wordpress chart:
+```
+[kamran@kworkhorse ~]$ helm install myblog bitnami/wordpress
+NAME: myblog
+LAST DEPLOYED: Fri Apr 24 00:00:23 2020
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+NOTES:
+**Please be patient while the chart is being deployed**
+
+To access your WordPress site from outside the cluster follow the steps below:
+
+1. Get the WordPress URL by running these commands:
+
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+        Watch the status with: 'kubectl get svc --namespace default -w myblog-wordpress'
+
+   export SERVICE_IP=$(kubectl get svc --namespace default myblog-wordpress --template "{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}")
+   echo "WordPress URL: http://$SERVICE_IP/"
+   echo "WordPress Admin URL: http://$SERVICE_IP/admin"
+
+2. Open a browser and access WordPress using the obtained URL.
+
+3. Login with the following credentials below to see your blog:
+
+  echo Username: user
+  echo Password: $(kubectl get secret --namespace default myblog-wordpress -o jsonpath="{.data.wordpress-password}" | base64 --decode)
+[kamran@kworkhorse ~]$ 
+```
+
+Above deploys the chart, which you can see in `helm list`:
+
+```
+[kamran@kworkhorse ~]$ helm list
+NAME  	NAMESPACE	REVISION	UPDATED                                 	STATUS  	CHART          	APP VERSION
+myblog	default  	1       	2020-04-24 00:00:23.499057849 +0200 CEST	deployed	wordpress-9.1.9	5.4.0      
+[kamran@kworkhorse ~]$ 
+```
+
+The chart deploys a wordpress `deployment` and a mariadb `statefulset`. 
+
+```
+[kamran@kworkhorse ~]$ kubectl get pods
+NAME                                READY   STATUS    RESTARTS   AGE
+multitool-5dd8699c59-z5kdn          1/1     Running   0          35h
+myblog-mariadb-0                    1/1     Running   0          102s
+myblog-wordpress-74c676dccd-45trh   0/1     Running   0          102s
+nginx-745b4df97d-wjrtr              1/1     Running   0          3d2h
+tomcat-78d49d44d-vlcqb              1/1     Running   0          34h
+[kamran@kworkhorse ~]$
+```
+
+It also sets up the wordpress service as type load-balancer:
+
+```
+[kamran@kworkhorse ~]$ kubectl get svc
+NAME               TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
+kubernetes         ClusterIP      10.96.0.1        <none>          443/TCP                      7d1h
+multitool          ClusterIP      10.102.171.156   <none>          80/TCP                       35h
+myblog-mariadb     ClusterIP      10.106.159.63    <none>          3306/TCP                     2m16s
+myblog-wordpress   LoadBalancer   10.96.159.46     <pending>       80:30356/TCP,443:30938/TCP   2m16s
+nginx              LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP                 2d3h
+tomcat             ClusterIP      10.105.43.47     <none>          8080/TCP                     34h
+[kamran@kworkhorse ~]$ 
+```
+
+You can access this wordpress service, if you run `minikube tunnel` in a separate terminal, as a regular user. As soon as you run it, come back to the previous terminal, check the services again, and you will see that the wordpress service's loadBalancer has an IP address!
+
+```
+[kamran@kworkhorse ~]$ kubectl get svc
+NAME               TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
+kubernetes         ClusterIP      10.96.0.1        <none>          443/TCP                      7d1h
+multitool          ClusterIP      10.102.171.156   <none>          80/TCP                       35h
+myblog-mariadb     ClusterIP      10.106.159.63    <none>          3306/TCP                     5m20s
+myblog-wordpress   LoadBalancer   10.96.159.46     10.96.159.46    80:30356/TCP,443:30938/TCP   5m20s
+nginx              LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP                 2d3h
+tomcat             ClusterIP      10.105.43.47     <none>          8080/TCP                     34h
+[kamran@kworkhorse ~]$ 
+```
+
+Access this IP from a browser in your host computer, and you will see your wordpress blog site. To access admin panel, you will need the password of the admin user, which the wordpress helm chart shows how to obtain - in the `Notes`. 
+
+```
+[kamran@kworkhorse ~]$ echo Password: $(kubectl get secret --namespace default myblog-wordpress -o jsonpath="{.data.wordpress-password}" | base64 --decode)
+Password: TGERAY7mzZ
+[kamran@kworkhorse ~]$ 
+```
+
+
+Congratulations! You are all set!
+
 
 
 # Some limitations of minikube:
 
 * The IP address of the minikube VM may change during subsequent `stop` , `start` operations. But if all you want to do is use `kubectl` to access the cluster inside that VM, then you should not be bothered, as the `minikube start` command updates your local `kube/config` file with the latest IP address of the minikube VM/API-server.
-* Minikube comes with a built-in ingress/reverse proxy (using nginx), but you still can't use LetsEncrypt's certificates while using the LetsEncrypt's HTTP challenge. The reason is that you will most probably be behind a home router/firewall, and HTTP challenge will not work unless you go through additional steps, which involve modifying forwarding rules of your home router. You can install Traefik with HTTPS support enabled, but without enabling LetsEncrypt. This way you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate will be self signed, but at least you will get HTTPS URLs working. Though you can use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS.
+* Minikube comes with a built-in ingress/reverse proxy (using nginx). However, you will most probably not be able to use LetsEncrypt's SSL certificates while using the LetsEncrypt's HTTP challenge. The reason is that you will most probably be behind a home router/firewall, and HTTP challenge will not work unless you go through additional steps, which involve modifying forwarding rules of your home router and forward port 80 traffic from your router to your work computer. (Your work computer will most probably be on a wireless network, and it will also keep changing it's IP address!). One trick you can do is to install `Traefik` with HTTPS support enabled but without configuring it to use LetsEncrypt. This way you can still access your apps over HTTPS using TRAEFIK_DEFAULT_CERT. This certificate will be self signed, but at least you will get HTTPS URLs working. Though you can use LetsEncrypt DNS challenge to get valid certificates for your apps running in your minikube cluster, and have your apps served through HTTPS.
+
+Remember, this (minikube) cluster is supposed to be a **local test cluster**, for learning, development, and experimentation. Don't expect all the bells and whistles of a regular kubernetes cluster to be present in this small one-node cluster. :)
+
 
 # Additional fun stuff:
 * If you don't want to use minikube's built-in LoadBalancer, you can setup your own, such as **MetalLB**. 
