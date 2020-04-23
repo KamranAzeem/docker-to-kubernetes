@@ -1225,8 +1225,17 @@ Password: TGERAY7mzZ
 [kamran@kworkhorse ~]$ 
 ```
 
+| ![images/wordpress-helm-1.png](images/wordpress-helm-1.png) |
+| ----------------------------------------------------------- |
 
-Congratulations! You are all set!
+| ![images/wordpress-helm-2.png](images/wordpress-helm-2.png) |
+| ----------------------------------------------------------- |
+
+| ![images/wordpress-helm-3.png](images/wordpress-helm-3.png) |
+| ----------------------------------------------------------- |
+
+
+Congratulations! Your minikube installation is complete, with **necessary** features :) You may want to add more add-ons, and/or modify it to your heart's content. But for now, you are all set! 
 
 
 
