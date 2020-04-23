@@ -901,7 +901,7 @@ The nginx ingress controller's rewrite rules are explained here: [https://kubern
 Updating `/etc/hosts` file is sometimes cumbersome, because each time you need to do: `sudo vi /etc/hosts` , then type your password, and so on. There are two ways to make your life easy.
 
 ## Method 1: Run a "dedicated"/"separate" terminal as root all the time:
-This is my practice as well. At any given time, I usually have 5-7 text terminals tabs open in the same terminal window; and the first one is always running is `root`. I always login as `root` on the first terminal tab using `sudo -i` and typing in my password once. After that whenever any operation on my OS requires `root` privileges, I simply go to that tab and run that over there. Simple and easy. Here is what is looks like:
+At any given time, I usually have 5-7 text terminals tabs open in the same terminal window; and the first one is always running as `root`. I always login as `root` on the first terminal tab using `sudo -i` and typing in my password *once*. After that whenever any operation on my OS requires `root` privileges, I simply go to that tab and run that over there. Simple and easy. Here is what is looks like:
 
 
 | ![images/text-terminal.png](images/text-terminal.png) |
@@ -911,13 +911,13 @@ This is my practice as well. At any given time, I usually have 5-7 text terminal
 ## Method 2: Adjust permissions of `/etc/hosts` so it is writable by you:
 Some people may raise eyebrows when they read this, but this is actually safe to do. 
 
-The file `/etc/host` has following ownership and permissions:
+By default, the file `/etc/host` has following ownership and permissions:
 ```
 [root@kworkhorse ~]# ls -l /etc/hosts
 -rw-r--r-- 1 root root 660 Apr 22 13:19 /etc/hosts
 [root@kworkhorse ~]#
 ```
-The above output means that the user `root` is the owner of this file. Also there is (sort of) group ownership of the group `root` on this file. From permissions perspective, the file is readable and writable by the owner (`root`) . The file is readable (read-only) by the members of group `root` , and the file is read-only for the "others" ("rest of the world").   
+The above output means that the user `root` is the owner of this file. Also there is (sort of) group ownership of the group `root` on this file. From permissions perspective, the file is readable and writable by the owner (`root`) . The file is readable (read-only) by the members of group `root` , and the file is read-only for *"others"* ("rest of the world").   
 
 What you can do is, change the ownership of the file `/etc/hosts` to your user, and at the same time allow the members of the group `root` to be able to write to this file. Doing it this way, will enable you to modify this file as a regular user "at will", without needing to type `sudo` all the time, resulting in your development work-flow becoming faster. After this change, you can even keep this file open in your IDE/text-editor in a separate dedicated tab, and whenever you want to make a change to it, you simply make the changes in it, and just save the file. 
 
@@ -1029,7 +1029,7 @@ version.BuildInfo{Version:"v3.2.0", GitCommit:"e11b7ce3b12db2941e90399e874513fbd
 
 That's it, you are good to start using helm. But, "What about tiller?". Well, Tiller has been removed in Helm version 3.x! You don't need tiller in your cluster anymore, if you are using helm v-3.x . See details here: [https://helm.sh/blog/helm-3-released/](https://helm.sh/blog/helm-3-released/) . 
 
-You don't need the "helm-tiller" add-on in your minikube cluster, if you want to use helm 3.
+You don't need minikube's "helm-tiller" add-on in your minikube cluster, if you want to use helm 3.
 
 ## Helm version 2:
 In case you want to use helm 2.x, for whatever reason, you need **helm 2.x** binary on your local computer, and it's server component **tiller** installed inside the kubernetes cluster. 
@@ -1051,12 +1051,6 @@ Perform these steps as user `root` or use `sudo`:
 [root@kworkhorse ~]# mv linux-amd64/helm /usr/local/bin/
 ```
 
-[kamran@kworkhorse ~]$ helm version
-Client: &version.Version{SemVer:"v2.16.6", GitCommit:"dd2e5695da88625b190e6b22e9542550ab503a47", GitTreeState:"clean"}
-Server: &version.Version{SemVer:"v2.16.3", GitCommit:"1ee0254c86d4ed6887327dabed7aa7da29d7eb0d", GitTreeState:"clean"}
-[kamran@kworkhorse ~]$ 
-
-
 Then, to install `tiller` on the minikube cluster, simply install the `helm-tiller` add-on, and you are good to go.
 
 ```
@@ -1064,6 +1058,15 @@ Then, to install `tiller` on the minikube cluster, simply install the `helm-till
 🌟  The 'helm-tiller' addon is enabled
 [kamran@kworkhorse ~]$ 
 ```
+
+Verify helm version:
+```
+[kamran@kworkhorse ~]$ helm version
+Client: &version.Version{SemVer:"v2.16.6", GitCommit:"dd2e5695da88625b190e6b22e9542550ab503a47", GitTreeState:"clean"}
+Server: &version.Version{SemVer:"v2.16.3", GitCommit:"1ee0254c86d4ed6887327dabed7aa7da29d7eb0d", GitTreeState:"clean"}
+[kamran@kworkhorse ~]$ 
+```
+
 
 ## Install an example helm chart:
 **Note:** Helm v3 is used in the commands below.
@@ -1235,7 +1238,7 @@ Password: TGERAY7mzZ
 | ----------------------------------------------------------- |
 
 
-Congratulations! Your minikube installation is complete, with **necessary** features :) You may want to add more add-ons, and/or modify it to your heart's content. But for now, you are all set! 
+Congratulations! Your minikube installation is complete, with necessary features :) You may want to add more add-ons, and/or modify it to your heart's content. But for now, you are all set! 
 
 
 
