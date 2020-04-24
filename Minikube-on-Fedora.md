@@ -3,6 +3,11 @@ If you are a developer (or even a system administrator), and you want to experim
 
 The emphasis is on having minikube *running as a VM*, (not as a process on docker), because this takes away all the possible complexity away from your local computer. It (minikube VM) makes setting up and running the kubernetes cluster very easy. 
 
+Here is how the minikube VM setup looks like:
+
+| ![images/minikube-network.png](images/minikube-network.png) |
+| ----------------------------------------------------------- |
+
 ## What do you need to get it to work?
 You need decently powered computer, with following specs:
 * CPUs with hardware virtualization (Intel VT or AMD-V). Normally Intel's i3, i5, i7 (and now i9), and AMD's FX 63xx, 83xx, 9xxx, A10, A8, etc  are a good choices. 
