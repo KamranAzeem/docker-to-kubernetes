@@ -502,9 +502,46 @@ You can now access your service as you would normally do through a LoadBalancer 
 Hurray! It works!
 
 
+**Note:**
+When you stop the `minikube tunnel` command, (after you have let it run for a while), it will ask you `sudo` password again. This is ok. The reason is that when it stops, it wants to remove the routing entry from the host computer, which it made at the start time of the tunnel. So, when you stop it properly by providing your password for `sudo` use, it removes the routing entry from the routing table from the host computer.
+
+```
+. . . 
+. . . 
+
+Status:	
+	machine: minikube
+	pid: 349178
+	route: 10.96.0.0/12 -> 192.168.39.174
+	minikube: Running
+	services: [myblog-wordpress, nginx]
+    errors: 
+		minikube: no errors
+		router: no errors
+		loadbalancer emulator: no errors
+
+^C[sudo] password for kamran: 
+[kamran@kworkhorse ~]$ 
+```
+
+If you check the routing table on the host, you won't find the entry for `10.96.0.0/12` anymore:
+```
+[root@kworkhorse ~]# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.0.1     0.0.0.0         UG    600    0        0 wlp2s0
+10.240.0.0      0.0.0.0         255.255.0.0     U     0      0        0 virbr2
+172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
+192.168.0.0     0.0.0.0         255.255.255.0   U     600    0        0 wlp2s0
+192.168.39.0    0.0.0.0         255.255.255.0   U     0      0        0 virbr1
+192.168.122.0   0.0.0.0         255.255.255.0   U     0      0        0 virbr0
+[root@kworkhorse ~]# 
+```
+
+
 # Use minikube's built-in ingress controller:
 
-You can use minikube's built-in ingress controller, which is based on nginx. It is a minikube add, so first, you will need to enable it.
+You can use minikube's built-in ingress controller, which is based on nginx. It is a minikube add-on, so first, you will need to enable it.
 
 ```
 [kamran@kworkhorse ~]$ minikube addons enable ingress
