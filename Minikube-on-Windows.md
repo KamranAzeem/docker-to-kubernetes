@@ -13,13 +13,13 @@ You need decently powered computer, with following specs:
 * CPUs with hardware virtualization (Intel VT or AMD-V). Normally Intel's i3, i5, i7 (and now i9), and AMD's FX 63xx, 83xx, 9xxx, A10, A8, etc  are a good choices. 
 * Minimum 4 GB RAM is good enough if you want to run Linux. Minikube takes 2 GB RAM from host computer, and assigns it to the minikube VM. If you are using Windows, then you need more, because windows is basically bloatware, and it just abuses system resources. 
 * At least 20 GB free disk-space on your host OS, because minikube will create a 20 GB virtual disk. You can increase the size of the virtual disk at the time of minikube setup.
-* A Hypervisor running on the computer, such as KVM. I don't recommend VirtualBox, or HyperV, or anything else. However, if you are on Windows or Mac, then you have no choice but to use one of these.
+* A Hypervisor running on the computer, such as KVM. I don't recommend VirtualBox, or Hyper-V, or anything else. However, if you are on Windows or Mac, then you have no choice but to use one of these. In this guide it is going to be Hyper-V.
 * Chromebooks will not work.
 
 ## Install and Setup Minikube on your local computer:
-The computer I am using for this "test-setup" is an Intel i5, with 8 GB RAM, runs Windows 10 Professional, and runs HyperV as Hypervisor. Based on my experience, KVM is the best Hypervisor so far, and HyperV - or any other - is no-where close to it. But since this (Windows + HyperV) is something being used by some of the developers in my team - unfortunately - I thought I would cover this scenario, to at-least get them going, until they migrate themselves to Linux. I thought I would document it, so anybody interested in doing the same can benefit. I would also like to suggest that if you are using VirtualBox on Windows, that is even worse!. On Windows, HyperV is better than VirtualBox. 
+The computer I am using for this "test-setup" is an Intel i5, with 8 GB RAM, runs Windows 10 Professional, and runs HyperV as Hypervisor. Based on my experience, KVM is the best Hypervisor so far, and HyperV - or any other - is no-where close to it. But since this (Windows + Hyper-V) is something being used by some of the developers in my team - unfortunately - I thought I would cover this scenario, to at-least get them going, until they migrate themselves to Linux. I thought I would document it, so anybody interested in doing the same can benefit. I would also like to suggest that if you are using VirtualBox on Windows, that is even worse!. On Windows, HyperV is better than VirtualBox. 
 
-**Note:** This document was written for a computer, which has Windows 10 Professional as Host OS and HyperV as Hypervisor. If you have a different OS or different Hypervisor on your computer, then you need to consult a different guide for installing minikube on your computer.
+**Note:** This document was written for a computer, which has **Windows 10 Professional** as Host OS and **Hyper-V** as Hypervisor. If you have a different OS or different Hypervisor on your computer, then you need to consult a different guide for installing minikube on your computer.
  
 ### Prerequisites:
 Besides OS, you will need:
@@ -32,7 +32,7 @@ Besides OS, you will need:
 
 # Setup HyperV:
 
-This is not that complicated. Got to `Windows -> Settings -> Turn Windows features on or off` and enable **Hyper-V** 
+This is not that complicated. Go to `Windows -> Settings -> Turn Windows features on or off` and enable **Hyper-V** 
 
 | ![images/enable-hyperv.png](images/enable-hyperv.png) |
 | ----------------------------------------------------- |
@@ -53,55 +53,64 @@ Browse/ navigate to the following URL, and follow instructions on that page: [ht
 
 Download Minikube Windows Installer from: [https://github.com/kubernetes/minikube/releases/latest/download/minikube-installer.exe](https://github.com/kubernetes/minikube/releases/latest/download/minikube-installer.exe)
 
+## Download `kubectl` binary:
+Download the `kubectl` binary from [https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/windows/amd64/kubectl.exe](https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/windows/amd64/kubectl.exe) and place it inside `C:\Program Files\Kubernetes\Minikube\` directory . Minikube has already added this to your Windows' path , so it is a good place for all kubernetes related software.
 
+## Run `git-bash` or `PowerShell` - as administrator, and setup `minikube`:
+Run `git-bash` or `PowerShell` - as administrator, and run the following command to setup minikube.
 
+**Note:** All commands in this guide are run in `git bash` - as administrator. Minikube commands **will not** work if you run them as regular user.
 
+(This may take several minutes.)
 
-
-
-### Setup minikube VM:
 ```
-[kamran@kworkhorse ~]$ minikube start --driver=kvm2
-😄  minikube v1.9.2 on Fedora 31
-    ▪ KUBECONFIG=/home/kamran/.kube/config:/home/kamran/.kube/kubeadm-cluster.conf
-✨  Using the kvm2 driver based on user configuration
-💾  Downloading driver docker-machine-driver-kvm2:
-    > docker-machine-driver-kvm2.sha256: 65 B / 65 B [-------] 100.00% ? p/s 0s
-    > docker-machine-driver-kvm2: 13.88 MiB / 13.88 MiB  100.00% 2.46 MiB p/s 5
-💿  Downloading VM boot image ...
+demouser@windows-10-pro-demo MINGW64 ~
+
+$ minikube.exe start --driver=hyperv
+
+* minikube v1.9.2 on Microsoft Windows 10 Pro 10.0.18363 Build 18363
+* Using the hyperv driver based on user configuration
+* Downloading VM boot image ...
     > minikube-v1.9.0.iso.sha256: 65 B / 65 B [--------------] 100.00% ? p/s 0s
-    > minikube-v1.9.0.iso: 174.93 MiB / 174.93 MiB [-] 100.00% 6.20 MiB p/s 29s
-👍  Starting control plane node m01 in cluster minikube
-💾  Downloading Kubernetes v1.18.0 preload ...
+    > minikube-v1.9.0.iso: 174.93 MiB / 174.93 MiB [-] 100.00% 6.22 MiB p/s 29sr
+* Starting control plane node m01 in cluster minikube
+* Downloading Kubernetes v1.18.0 preload ...
     > preloaded-images-k8s-v2-v1.18.0-docker-overlay2-amd64.tar.lz4: 542.91 MiB
-🔥  Creating kvm2 VM (CPUs=2, Memory=3900MB, Disk=20000MB) ...
-🐳  Preparing Kubernetes v1.18.0 on Docker 19.03.8 ...
-🌟  Enabling addons: default-storageclass, storage-provisioner
-🏄  Done! kubectl is now configured to use "minikube"
-
-❗  /usr/local/bin/kubectl is v1.13.4, which may be incompatible with Kubernetes v1.18.0.
-💡  You can also use 'minikube kubectl -- get pods' to invoke a matching version
-[kamran@kworkhorse ~]$ 
+* Creating hyperv VM (CPUs=2, Memory=2200MB, Disk=20000MB) ...
+* Preparing Kubernetes v1.18.0 on Docker 19.03.8 ...
+* Enabling addons: default-storageclass, storage-provisioner
+* Done! kubectl is now configured to use "minikube"
 ```
 
-At this point, you should see minikube VM running in HyperV:
-|  ![images/minikube-vm-in-hyperv.png](images/minikube-vm-in-hyperv.png) |
-| --------------------------------------------------------------- |
-
-
-
+Verify that the minikube VM has an IP address:
 ```
-[kamran@kworkhorse ~]$ kubectl get nodes
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube ip
+192.168.241.250
+```
+
+Verify that you can talk to kubernetes cluster inside minikube VM:
+```
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl.exe get nodes
 NAME       STATUS   ROLES    AGE   VERSION
-minikube   Ready    master   2m    v1.18.0
-[kamran@kworkhorse ~]$ 
+minikube   Ready    master   78s   v1.18.0
 ```
+
+The minikube VM will look like this in your Hyper-V interface:
+
+| ![images/minikube-vm-in-hyperv.png](images/minikube-vm-in-hyperv.png) |
+| --------------------------------------------------------------------- |
+
+Very good. We are all set. 
+
 
 ### Minikube Addons:
 By deafult, Minikube brings several addons with it in the deafult installation, but only few are enabled. Depending on your needs you can enable different addons.
 
 ```
-[kamran@kworkhorse ~]$ minikube addons list
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube addons list
 |-----------------------------|----------|--------------|
 |         ADDON NAME          | PROFILE  |    STATUS    |
 |-----------------------------|----------|--------------|
@@ -125,23 +134,23 @@ By deafult, Minikube brings several addons with it in the deafult installation, 
 | storage-provisioner         | minikube | enabled ✅   |
 | storage-provisioner-gluster | minikube | disabled     |
 |-----------------------------|----------|--------------|
-[kamran@kworkhorse ~]$ 
 ```
 
 ```
-[kamran@kworkhorse ~]$ minikube addons enable dashboard
-🌟  The 'dashboard' addon is enabled
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube addons enable dashboard
+*  The 'dashboard' addon is enabled 
 ```
 
 To use the dashboard addon, run the `minikube dashboard` command:
 
 ```
-[kamran@kworkhorse ~]$ minikube dashboard
-🤔  Verifying dashboard health ...
-🚀  Launching proxy ...
-🤔  Verifying proxy health ...
-🎉  Opening http://127.0.0.1:37419/api/v1/namespaces/kubernetes-dashboard/services/http:kubernetes-dashboard:/proxy/ in your default browser...
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube dashboard
+*  Verifying dashboard health ...
+*  Launching proxy ...
+*  Verifying proxy health ...
+*  Opening http://127.0.0.1:37419/api/v1/namespaces/kubernetes-dashboard/services/http:kubernetes-dashboard:/proxy/ in your default browser...
 Opening in existing browser session.
 ```
 
@@ -154,22 +163,23 @@ Opening in existing browser session.
 One more addon that will surely prove useful is the `metrics-server`. It will help you figure out how much CPU and RAM your pods (and node) are consuming.
 
 ``` 
-[kamran@kworkhorse ~]$ minikube addons enable metrics-server
-🌟  The 'metrics-server' addon is enabled
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube addons enable metrics-server
+*  The 'metrics-server' addon is enabled 
 ``` 
 
-Nodes - CPU and RAM usage:
+After a few minutes, check Nodes - CPU and RAM usage:
 ```
-[kamran@kworkhorse ~]$ kubectl top nodes
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl top nodes
 NAME       CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%   
 minikube   153m         7%     1193Mi          33%       
-[kamran@kworkhorse ~]$ 
 ```
 
 Pods - CPU and RAM usage:
 ```
-[kamran@kworkhorse ~]$ kubectl top pods --all-namespaces
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl top pods --all-namespaces
 NAMESPACE              NAME                                         CPU(cores)   MEMORY(bytes)   
 kube-system            coredns-66bff467f8-dww5p                     2m           6Mi             
 kube-system            coredns-66bff467f8-hnbxp                     2m           6Mi             
@@ -186,20 +196,11 @@ kubernetes-dashboard   kubernetes-dashboard-bc446cc64-wccx9         0m          
 [kamran@kworkhorse ~]$ 
 ```
 
-
-
-Install Helm-Tiller addon, which is good to install helm charts on your minikube cluster:
-```
-[kamran@kworkhorse ~]$ minikube addons enable helm-tiller
-🌟  The 'helm-tiller' addon is enabled
-[kamran@kworkhorse ~]$ 
-```
-
-
 The plugins you enable will show up as pods in the `kube-system` name-space.
 
 ```
-[kamran@kworkhorse ~]$ kubectl --namespace=kube-system get pods
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl --namespace=kube-system get pods
 NAME                               READY   STATUS    RESTARTS   AGE
 coredns-66bff467f8-dww5p           1/1     Running   0          47m
 coredns-66bff467f8-hnbxp           1/1     Running   0          47m
@@ -210,81 +211,82 @@ kube-proxy-hdc9r                   1/1     Running   0          47m
 kube-scheduler-minikube            1/1     Running   0          47m
 metrics-server-7bc6d75975-kp4kp    1/1     Running   0          11m     <--- Addon added later
 storage-provisioner                1/1     Running   1          47m
-tiller-deploy-58bf6f4995-nvwc6     1/1     Running   0          89s     <--- Addon added later
-[kamran@kworkhorse ~]$ 
 ```
 
 ## Stopping and starting minikube:
 
 You can stop the VM using:
 ```
-[kamran@kworkhorse ~]$ minikube stop
-✋  Stopping "minikube" in kvm2 ...
-🛑  Node "m01" stopped.
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube.exe stop
+* Stopping "minikube" in hyperv ...
+* Powering off "minikube" via SSH ...
+* Node "m01" stopped.
 ```
 
 You can start an existing minikube VM by simply running the `minikube start` command. It will pick up all the configuration from files inside `~/.minikube/*` , and bring up the minikube VM in the same state as it was before (including addons). i.e. In such case, it will not create a new minikube VM.
 
+(This may take several minutes)
 ```
-[kamran@kworkhorse ~]$ minikube start
-😄  minikube v1.9.2 on Fedora 31
-    ▪ KUBECONFIG=/home/kamran/.kube/config:/home/kamran/.kube/kubeadm-cluster.conf
-✨  Using the kvm2 driver based on existing profile
-👍  Starting control plane node m01 in cluster minikube
-🔄  Restarting existing kvm2 VM for "minikube" ...
-🐳  Preparing Kubernetes v1.18.0 on Docker 19.03.8 ...
-🌟  Enabling addons: dashboard, default-storageclass, helm-tiller, metrics-server, storage-provisioner
-🏄  Done! kubectl is now configured to use "minikube"
-
-❗  /usr/local/bin/kubectl is v1.13.4, which may be incompatible with Kubernetes v1.18.0.
-💡  You can also use 'minikube kubectl -- get pods' to invoke a matching version
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube start
+* minikube v1.9.2 on Microsoft Windows 10 Pro 10.0.18363 Build 18363
+* Using the hyperv driver based on existing profile
+* Starting control plane node m01 in cluster minikube
+* Restarting existing hyperv VM for "minikube" ...
+* Preparing Kubernetes v1.18.0 on Docker 19.03.8 ...
+* Enabling addons: dashboard, default-storageclass, helm-tiller, ingress, metrics-server, storage-provisioner
+* Done! kubectl is now configured to use "minikube"
 ```
 
 ```
-[kamran@kworkhorse ~]$ minikube status
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube.exe status
 m01
 host: Running
 kubelet: Running
 apiserver: Running
 kubeconfig: Configured
-
-[kamran@kworkhorse ~]$ 
 ```
 
 ## Verify host-to-minikube connectivity:
 
 Find the IP of your minikube machine. This is important for understanding, but we will talk about this in a moment.
 ```
-[kamran@kworkhorse ~]$ minikube ip
-192.168.39.174
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube.exe ip
+192.168.241.250
 ```
 
 ```
-[kamran@kworkhorse ~]$ ping 192.168.39.174
-PING 192.168.39.174 (192.168.39.174) 56(84) bytes of data.
-64 bytes from 192.168.39.174: icmp_seq=1 ttl=64 time=0.195 ms
-64 bytes from 192.168.39.174: icmp_seq=2 ttl=64 time=0.272 ms
-^C
---- 192.168.39.174 ping statistics ---
-2 packets transmitted, 2 received, 0% packet loss, time 1009ms
-rtt min/avg/max/mdev = 0.195/0.233/0.272/0.038 ms
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ ping 192.168.241.250
+
+Pinging 192.168.241.250 with 32 bytes of data:
+Reply from 192.168.241.250: bytes=32 time<1ms TTL=64
+Reply from 192.168.241.250: bytes=32 time<1ms TTL=64
+Reply from 192.168.241.250: bytes=32 time<1ms TTL=64
+Reply from 192.168.241.250: bytes=32 time=1ms TTL=64
+
+Ping statistics for 192.168.241.250:
+    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 0ms, Maximum = 1ms, Average = 0ms
 ```
 
 
 For any OS related maintenance (or exploration), log onto the minikube vm directly, using `minikube ssh` command:
+
 ```
-[kamran@kworkhorse ~]$ minikube ssh
-                         _             _            
-            _         _ ( )           ( )           
-  ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __  
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube.exe ssh
+                         _             _
+            _         _ ( )           ( )
+  ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __
 /' _ ` _ `\| |/' _ `\| || , <  ( ) ( )| '_`\  /'__`\
 | ( ) ( ) || || ( ) || || |\`\ | (_) || |_) )(  ___/
 (_) (_) (_)(_)(_) (_)(_)(_) (_)`\___/'(_,__/'`\____)
 
-$ 
 
 $ sudo -i
 sudo: /etc/environment: No such file or directory
@@ -293,8 +295,8 @@ sudo: /etc/environment: No such file or directory
 (Ignore the error message about `/etc/environment`) 
 
 
-## About setting up `/etc/hosts` with minikube's IP on host computer:
-Some people might be tempted to update minikube's IP address in /etc/hosts file, which is actually useless exercise. The reason is that IP address of the minikube VM will keep changing, and you will keep updating the `/etc/hosts` file. Essentially, you really not gain any advantage of putting this IP in `/etc/hosts`. 
+## About setting up `C:\Windows\System32\drivers\etc\hosts` with minikube's IP on host computer:
+Some people might be tempted to update minikube's IP address in `hosts` file, which is actually useless exercise. The reason is that IP address of the minikube VM will keep changing, and you will keep updating the `hosts` file. Essentially, you really not gain any advantage of putting this IP in `C:\Windows\System32\drivers\etc\hosts`. 
 
 In short, don't bother.
 
@@ -302,54 +304,54 @@ In short, don't bother.
 Now we have minikube installed. It is time to start using it. We already have kubectl installed on the host computer, and minikube has already created a `kube/config` for us. Minikube also sets the context for kubectl to use minikube cluster. So if we run `kubectl` commands against this cluster, the commands will work. 
 
 ```
-[kamran@kworkhorse ~]$ kubectl config get-contexts
-CURRENT   NAME                                                    CLUSTER                                                 AUTHINFO                                                NAMESPACE
-          gke_trainingvideos_europe-north1-a_docker-to-k8s-demo   gke_trainingvideos_europe-north1-a_docker-to-k8s-demo   gke_trainingvideos_europe-north1-a_docker-to-k8s-demo   
-          kubernetes-admin@kubernetes                             kubernetes                                              kubernetes-admin                                        
-*         minikube                                                minikube                                                minikube                                                
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl.exe config get-contexts
+CURRENT   NAME       CLUSTER    AUTHINFO   NAMESPACE
+*         minikube   minikube   minikube
 ```
 
 ```
-[kamran@kworkhorse ~]$ kubectl get nodes -o wide
-NAME       STATUS   ROLES    AGE     VERSION   INTERNAL-IP      EXTERNAL-IP   OS-IMAGE               KERNEL-VERSION   CONTAINER-RUNTIME
-minikube   Ready    master   3d22h   v1.18.0   192.168.39.174   <none>        Buildroot 2019.02.10   4.19.107         docker://19.3.8
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl.exe get nodes -o wide
+NAME       STATUS   ROLES    AGE    VERSION   INTERNAL-IP       EXTERNAL-IP   OS-IMAGE               KERNEL-VERSION   CONTAINER-RUNTIME
+minikube   Ready    master   3h2m   v1.18.0   192.168.241.250   <none>        Buildroot 2019.02.10   4.19.107         docker://19.3.8 
 ```
 
 ## Create our first deployment on this cluster:
 Lets create our first deployment on this cluster, and then access it from our host computer.
 
 ```
-[kamran@kworkhorse ~]$ kubectl create deployment nginx --image=nginx:alpine
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl create deployment nginx --image=nginx:alpine
 deployment.apps/nginx created
 
-[kamran@kworkhorse ~]$ kubectl get pods
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get pods
 NAME                     READY   STATUS    RESTARTS   AGE
 nginx-745b4df97d-wjrtr   1/1     Running   0          14s
-[kamran@kworkhorse ~]$ 
 ```
 
 ## Access your application through NodePort:
 Lets expose this `deployment` as a service of `type: NodePort`, so we can access it from our host computer. 
 
 ```
-[kamran@kworkhorse ~]$ kubectl expose deployment nginx --type=NodePort --port 80
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl expose deployment nginx --type=NodePort --port 80
 service/nginx exposed
 
 
-[kamran@kworkhorse ~]$ kubectl get svc
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get svc
 NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
 kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP        4d1h
-nginx        NodePort    10.98.136.156   <none>        80:31255/TCP   6s
-[kamran@kworkhorse ~]$ 
-
+nginx        NodePort    10.100.136.156  <none>        80:31255/TCP   6s
 ```
 
 Now, we can access this service using our minikube VM's IP address and the NodePort assigned to the service.
 
 ```
-[kamran@kworkhorse ~]$ curl 192.168.39.174:31255
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl -s 192.168.241.250:31255
 <!DOCTYPE html>
 <html>
 <head>
@@ -358,7 +360,6 @@ Now, we can access this service using our minikube VM's IP address and the NodeP
 </head>
 <h1>Welcome to nginx!</h1>
 </html>
-[kamran@kworkhorse ~]$ 
 ```
 
 Great! So we can access the service using VM's IP and the NodePort of the service.
@@ -367,36 +368,38 @@ Great! So we can access the service using VM's IP and the NodePort of the servic
 First, lets delete the existing nginx service , and create a new one as `type:LoadBalancer`.
 
 ```
-[kamran@kworkhorse ~]$ kubectl delete service nginx
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl delete service nginx
 service/nginx deleted
 ```
 
 ```
-[kamran@kworkhorse ~]$ kubectl expose deployment nginx --type=LoadBalancer --port 80
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl expose deployment nginx --type=LoadBalancer --port 80
 service/nginx exposed
 
 
-[kamran@kworkhorse ~]$ kubectl get svc
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get svc
 NAME         TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
 kubernetes   ClusterIP      10.96.0.1       <none>        443/TCP        4d21h
 nginx        LoadBalancer   10.106.130.70   <pending>     80:32185/TCP   4s
-[kamran@kworkhorse ~]$ 
 ```
 
 Notice that the `EXTERNAL-IP` is in `<pending>` state. 
 
 MiniKube's LoadBalancer is activated when we run `minikube tunnel` command. As soon as the internal loadbalancer comes up, the service gets an EXTERNAL-IP address.
 
-Remember that `minikube tunnel` command needs to run in a separate terminal, and it will ask you `sudo` password. This is because `minikube tunnel` runs as a process, and creates an additional network route on your work computer, so that all traffic destined to `10.96.0.0/12` network is sent to `192.168.39.174` - which is the IP address of the minikube VM.
+Remember that `minikube tunnel` command needs to run in a separate terminal, and it will ask you `sudo` password. This is because `minikube tunnel` runs as a process, and creates an additional network route on your work computer, so that all traffic destined to `10.96.0.0/12` network is sent to `192.168.241.250` - which is the IP address of the minikube VM.
 
 Here is the output of the `minikube tunnel` command:
 ```
-[kamran@kworkhorse ~]$ minikube tunnel
-[sudo] password for kamran: 
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube tunnel
 Status:	
 	machine: minikube
 	pid: 75840
-	route: 10.96.0.0/12 -> 192.168.39.174
+	route: 10.96.0.0/12 -> 192.168.241.250
 	minikube: Running
 	services: [nginx]
     errors: 
@@ -411,35 +414,55 @@ Status:
 Here is the routing table from my work-computer (the physical/KVM host) - *after* the `minikube tunnel` command is executed:
 
 ```
-[root@kworkhorse ~]# route -n
-Kernel IP routing table
-Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
-0.0.0.0         192.168.0.1     0.0.0.0         UG    600    0        0 wlp2s0
-10.96.0.0       192.168.39.174  255.240.0.0     UG    0      0        0 virbr1   <------- This one!
-10.240.0.0      0.0.0.0         255.255.0.0     U     0      0        0 virbr2
-172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
-172.18.0.0      0.0.0.0         255.255.0.0     U     0      0        0 br-cc4817088a63
-192.168.0.0     0.0.0.0         255.255.255.0   U     600    0        0 wlp2s0
-192.168.39.0    0.0.0.0         255.255.255.0   U     0      0        0 virbr1
-192.168.122.0   0.0.0.0         255.255.255.0   U     0      0        0 virbr0
-[root@kworkhorse ~]# 
+demouser@windows-10-pro-demo MINGW64 ~
+$ route print
+. . . 
+
+IPv4 Route Table
+===========================================================================
+Active Routes:
+Network Destination        Netmask          Gateway       Interface  Metric
+          0.0.0.0          0.0.0.0      192.168.0.1     192.168.0.31     45
+        10.96.0.0      255.240.0.0  192.168.241.250  192.168.241.241   5001    <---- This one!
+        127.0.0.0        255.0.0.0         On-link         127.0.0.1    331
+        127.0.0.1  255.255.255.255         On-link         127.0.0.1    331
+  127.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+      192.168.0.0    255.255.255.0         On-link      192.168.0.31    301
+     192.168.0.31  255.255.255.255         On-link      192.168.0.31    301
+    192.168.0.255  255.255.255.255         On-link      192.168.0.31    301
+  192.168.241.240  255.255.255.240         On-link   192.168.241.241   5256
+  192.168.241.241  255.255.255.255         On-link   192.168.241.241   5256
+  192.168.241.255  255.255.255.255         On-link   192.168.241.241   5256
+        224.0.0.0        240.0.0.0         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link      192.168.0.31    301
+        224.0.0.0        240.0.0.0         On-link   192.168.241.241   5256
+  255.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+  255.255.255.255  255.255.255.255         On-link      192.168.0.31    301
+  255.255.255.255  255.255.255.255         On-link   192.168.241.241   5256
+===========================================================================
+Persistent Routes:
+  None
+
+. . . 
+
 ```
 
 Back on the first terminal, if you check the list of services, you will see that your service has an EXTERNAL-IP address - `10.106.130.170`. 
 
 
 ```
-[kamran@kworkhorse ~]$ kubectl  get svc
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl  get svc
 NAME         TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)        AGE
 kubernetes   ClusterIP      10.96.0.1       <none>          443/TCP        5d
 nginx        LoadBalancer   10.106.130.70   10.106.130.70   80:32185/TCP   171m
-[kamran@kworkhorse ~]$ 
 ```
 
 You can now access your service as you would normally do through a LoadBalancer IP, without using any fancy ports.
 
 ```
-[kamran@kworkhorse ~]$ curl 10.106.130.70
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl 10.106.130.70
 <!DOCTYPE html>
 <html>
 <head>
@@ -452,14 +475,13 @@ You can now access your service as you would normally do through a LoadBalancer 
 <p><em>Thank you for using nginx.</em></p>
 </body>
 </html>
-[kamran@kworkhorse ~]$
 ```
 
 Hurray! It works!
 
 
 **Note:**
-When you stop the `minikube tunnel` command, (after you have let it run for a while), it will ask you `sudo` password again. This is ok. The reason is that when it stops, it wants to remove the routing entry from the host computer, which it made at the start time of the tunnel. So, when you stop it properly by providing your password for `sudo` use, it removes the routing entry from the routing table from the host computer.
+When you stop the `minikube tunnel` command (using ctrl+c), (after you have let it run for a while), it removes the routing entry from the routing table from the host computer.
 
 ```
 . . . 
@@ -468,31 +490,54 @@ When you stop the `minikube tunnel` command, (after you have let it run for a wh
 Status:	
 	machine: minikube
 	pid: 349178
-	route: 10.96.0.0/12 -> 192.168.39.174
+	route: 10.96.0.0/12 -> 192.168.241.250
 	minikube: Running
-	services: [myblog-wordpress, nginx]
+	services: [nginx]
     errors: 
 		minikube: no errors
 		router: no errors
 		loadbalancer emulator: no errors
 
-^C[sudo] password for kamran: 
-[kamran@kworkhorse ~]$ 
+^C
+demouser@windows-10-pro-demo MINGW64 ~
+$
 ```
 
 If you check the routing table on the host, you won't find the entry for `10.96.0.0/12` anymore:
+
 ```
-[root@kworkhorse ~]# route -n
-Kernel IP routing table
-Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
-0.0.0.0         192.168.0.1     0.0.0.0         UG    600    0        0 wlp2s0
-10.240.0.0      0.0.0.0         255.255.0.0     U     0      0        0 virbr2
-172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
-192.168.0.0     0.0.0.0         255.255.255.0   U     600    0        0 wlp2s0
-192.168.39.0    0.0.0.0         255.255.255.0   U     0      0        0 virbr1
-192.168.122.0   0.0.0.0         255.255.255.0   U     0      0        0 virbr0
-[root@kworkhorse ~]# 
+demouser@windows-10-pro-demo MINGW64 ~
+$ route print
+. . . 
+
+IPv4 Route Table
+===========================================================================
+Active Routes:
+Network Destination        Netmask          Gateway       Interface  Metric
+          0.0.0.0          0.0.0.0      192.168.0.1     192.168.0.31     45
+        127.0.0.0        255.0.0.0         On-link         127.0.0.1    331
+        127.0.0.1  255.255.255.255         On-link         127.0.0.1    331
+  127.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+      192.168.0.0    255.255.255.0         On-link      192.168.0.31    301
+     192.168.0.31  255.255.255.255         On-link      192.168.0.31    301
+    192.168.0.255  255.255.255.255         On-link      192.168.0.31    301
+  192.168.241.240  255.255.255.240         On-link   192.168.241.241   5256
+  192.168.241.241  255.255.255.255         On-link   192.168.241.241   5256
+  192.168.241.255  255.255.255.255         On-link   192.168.241.241   5256
+        224.0.0.0        240.0.0.0         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link      192.168.0.31    301
+        224.0.0.0        240.0.0.0         On-link   192.168.241.241   5256
+  255.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+  255.255.255.255  255.255.255.255         On-link      192.168.0.31    301
+  255.255.255.255  255.255.255.255         On-link   192.168.241.241   5256
+===========================================================================
+Persistent Routes:
+  None
+
+. . . 
+
 ```
+
 
 
 # Use minikube's built-in ingress controller:
@@ -500,16 +545,17 @@ Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 You can use minikube's built-in ingress controller, which is based on nginx. It is a minikube add-on, so first, you will need to enable it.
 
 ```
-[kamran@kworkhorse ~]$ minikube addons enable ingress
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube addons enable ingress
 🌟  The 'ingress' addon is enabled
-[kamran@kworkhorse ~]$ 
 ```
 
 
 Verify that the NGINX Ingress controller is running in the `kube-system` namespace:
 
 ```
-[kamran@kworkhorse ~]$ kubectl get pods -n kube-system
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get pods -n kube-system
 NAME                                        READY   STATUS    RESTARTS   AGE
 coredns-66bff467f8-dww5p                    1/1     Running   3          5d13h
 coredns-66bff467f8-hnbxp                    1/1     Running   3          5d13h
@@ -521,15 +567,14 @@ kube-scheduler-minikube                     1/1     Running   2          5d13h
 metrics-server-7bc6d75975-kp4kp             1/1     Running   3          5d12h
 nginx-ingress-controller-6d57c87cb9-tbnqt   0/1     Running   0          58s      <----- This one!
 storage-provisioner                         1/1     Running   4          5d13h
-tiller-deploy-58bf6f4995-nvwc6              1/1     Running   2          5d12h
-[kamran@kworkhorse ~]$ 
 ```
 
 
 Create a deployment. Lets use `praqma/network-multitool` to run a new deployment.
 
 ```
-[kamran@kworkhorse minikube]$ cat 01-multitool-deployment.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ cat 01-multitool-deployment.yaml 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -558,40 +603,42 @@ spec:
           requests:
             cpu: 5m
             memory: 10Mi
-[kamran@kworkhorse minikube]$ 
 ```
 
 ```
-[kamran@kworkhorse minikube]$ kubectl apply -f 01-multitool-deployment.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl apply -f 01-multitool-deployment.yaml 
 deployment.apps/multitool created
-[kamran@kworkhorse minikube]$ 
 ```
 
 ```
-[kamran@kworkhorse minikube]$ kubectl get pods
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get pods
 NAME                         READY   STATUS    RESTARTS   AGE
 multitool-5dd8699c59-z5kdn   1/1     Running   0          110s
 nginx-745b4df97d-wjrtr       1/1     Running   0          38h
-[kamran@kworkhorse minikube]$
 ```
 
 Expose this deployment as a service:
 
 ```
-[kamran@kworkhorse minikube]$ kubectl expose deployment multitool --type ClusterIP --port 80
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl expose deployment multitool --type ClusterIP --port 80
 service/multitool exposed
-[kamran@kworkhorse minikube]$ kubectl get svc 
+
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get svc 
 NAME         TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
 kubernetes   ClusterIP      10.96.0.1        <none>          443/TCP        5d13h
 multitool    ClusterIP      10.102.171.156   <none>          80/TCP         20s
 nginx        LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP   15h
-[kamran@kworkhorse minikube]$ 
 ```
 
 Or, you can use the following file to create the same service (for multitool):
 
 ```
-[kamran@kworkhorse minikube]$ cat 02-multitool-service.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ cat 02-multitool-service.yaml 
 apiVersion: v1
 kind: Service
 metadata:
@@ -606,14 +653,14 @@ spec:
   selector:
     app: multitool
   type: ClusterIP
-[kamran@kworkhorse minikube]$ 
 ```
 
 
 Create an ingress for this service:
 
 ```
-[kamran@kworkhorse minikube]$ cat 03-multitool-ingress.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ cat 03-multitool-ingress.yaml 
 apiVersion: networking.k8s.io/v1beta1 # for versions before 1.14 use extensions/v1beta1
 kind: Ingress
 metadata:
@@ -626,40 +673,39 @@ spec:
       - path: /
         backend:
           serviceName: multitool
-          servicePort: 80
-[kamran@kworkhorse minikube]$ 
+          servicePort: 80 
 ```
 
 ```
-[kamran@kworkhorse minikube]$ kubectl apply -f  03-multitool-ingress.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl apply -f  03-multitool-ingress.yaml 
 ingress.networking.k8s.io/multitool-ingress created
-[kamran@kworkhorse minikube]$ 
 ```
 
 Verify that it is created:
 ```
-[kamran@kworkhorse minikube]$ kubectl get ingress
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get ingress
 NAME                CLASS    HOSTS                   ADDRESS          PORTS   AGE
-multitool-ingress   <none>   multitool.example.com   192.168.39.174   80      17s
-[kamran@kworkhorse minikube]$ 
+multitool-ingress   <none>   multitool.example.com   192.168.241.250   80      17s
 ```
 
-Now, update your `/etc/hosts` and point `multitool.example.com` to the ip address being shown under the ADDRESS column. This address is actually the IP address of your minikube VM.
+Now, update your `hosts` file and point `multitool.example.com` to the ip address being shown under the ADDRESS column. This address is actually the IP address of your minikube VM.
 
 ```
-[root@kworkhorse ~]# cat /etc/hosts 
-127.0.0.1  localhost localhost.localdomain
+demouser@windows-10-pro-demo MINGW64 ~
+$ cat /c/Windows/System32/drivers/etc/hosts
 
 # minikube ingress for multitool.example.com
-192.168.39.174	multitool.example.com
-[root@kworkhorse ~]# 
+192.168.241.250         multitool.example.com   nginx.example.com
+192.168.241.250         tomcat.example.com 
 ```
 
 The moment of truth. Access your multitool service from the host / your work computer:
 ```
-[kamran@kworkhorse ~]$ curl multitool.example.com
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl -s multitool.example.com
 Praqma Network MultiTool (with NGINX) - multitool-5dd8699c59-z5kdn - 172.17.0.10/16
-[kamran@kworkhorse ~]$ 
 ```
 
 It works!
@@ -673,7 +719,8 @@ For this example, I have created just one file, which contains all the three obj
 Here is the file:
 
 ```
-[kamran@kworkhorse minikube]$ cat tomcat-deploymet-service-ingress.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ cat tomcat-deploymet-service-ingress.yaml 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -755,24 +802,23 @@ spec:
         backend:
           serviceName: tomcat
           servicePort: 8080
-
-[kamran@kworkhorse minikube]$ 
 ```
 
 Lets create the deployment, service and ingress for tomcat:
 
 ```
-[kamran@kworkhorse minikube]$ kubectl apply -f tomcat-deploymet-service-ingress.yaml 
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl apply -f tomcat-deploymet-service-ingress.yaml 
 deployment.apps/tomcat created
 service/tomcat created
 ingress.networking.k8s.io/tomcat-ingress created
-[kamran@kworkhorse minikube]$ 
 ```
 
 Verify that the objects are created:
 
 ```
-[kamran@kworkhorse minikube]$ kubectl get deployments,services,ingress
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get deployments,services,ingress
 NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/multitool   1/1     1            1           43m
 deployment.apps/nginx       1/1     1            1           39h
@@ -785,31 +831,30 @@ service/nginx        LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TC
 service/tomcat       ClusterIP      10.101.172.146   <none>          8080/TCP       94s
 
 NAME                                   CLASS    HOSTS                   ADDRESS          PORTS   AGE
-ingress.extensions/multitool-ingress   <none>   multitool.example.com   192.168.39.174   80      33m
-ingress.extensions/tomcat-ingress      <none>   tomcat.example.com      192.168.39.174   80      94s
-[kamran@kworkhorse minikube]$ 
+ingress.extensions/multitool-ingress   <none>   multitool.example.com   192.168.241.250   80      33m
+ingress.extensions/tomcat-ingress      <none>   tomcat.example.com      192.168.241.250   80      94s
 ```
 **Note:** The `nginx` service of `type:LoadBalancer` showing up in the output above, has nothing to do with minikube's built-in ingress controller (which is also nginx based). The above nginx deployment and service is something we created earlier in this document.
 
 Alright, so we have the three objects related to tomcat. Notice that the ingress `tomcat.example.com` is also using the same IP address as the ingress for multitool, and that IP address is the IP address of the minikube VM. This is OK. That is exactly how it is supposed to look like.
 
-Lets see if we can access it from our host computer or not. To be able to do that, first we have to update `/etc/hosts` file and setup a host entry - as root (or sudo).
+Lets see if we can access it from our host computer or not. To be able to do that, first we have to update `hosts` file and setup a host entry - as administrator.
 
 ```
-[root@kworkhorse ~]# cat /etc/hosts 
-127.0.0.1  localhost localhost.localdomain
+demouser@windows-10-pro-demo MINGW64 ~
+$ cat /c/Windows/System32/drivers/etc/hosts
 
-# minikube ingresses:
-192.168.39.174	multitool.example.com
-192.168.39.174	tomcat.example.com
-[root@kworkhorse ~]# 
+# minikube ingress for multitool.example.com
+192.168.241.250         multitool.example.com   nginx.example.com
+192.168.241.250         tomcat.example.com 
 ```
-**Note:** If the IP address is same for two hosts/URLs, you can use write them together in a single line.
+**Note:** If the IP address is same for multiple hosts/URLs, you can use write them together in a single line.
 
 Lets access tomcat from the host:
 
 ```
-[kamran@kworkhorse minikube]$ curl tomcat.example.com
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl tomcat.example.com
 <!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>[kamran@kworkhorse minikube]$
 ```
 
@@ -820,11 +865,13 @@ If you are wondering, why are we celebrating by seeing a `404`, and some garbage
 Remember, I copied a `sample.war` file in tomcat. That was to test tomcat using `http://tomcat.example.com/sample` . So lets do that.
 
 ```
-[kamran@kworkhorse minikube]$ curl tomcat.example.com/sample
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl tomcat.example.com/sample
 ```
 
 ```
-[kamran@kworkhorse minikube]$ curl -L tomcat.example.com/sample
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl -L tomcat.example.com/sample
 <html>
 <head>
 <title>Sample "Hello, World" Application</title>
@@ -853,13 +900,12 @@ outlined in the Application Developer's Guide.
 
 </body>
 </html>
-[kamran@kworkhorse minikube]$ 
 ```
 
 Here is a screenshot of the same from a browser:
 
-| ![images/tomcat-sample.png](images/tomcat-sample.png) |
-| ----------------------------------------------------- |
+| ![images/tomcat-sample-windows.png](images/tomcat-sample-windows.png) |
+| --------------------------------------------------------------------- |
 
 
 
@@ -868,9 +914,10 @@ Here is a screenshot of the same from a browser:
 If you try to access `tomcat.example.com/sample` , and you see the output below, then you probably have used some annotations incorrectly.
 
 ```
-[kamran@kworkhorse minikube]$ curl tomcat.example.com/sample
+demouser@windows-10-pro-demo MINGW64 ~
+$ curl tomcat.example.com/sample
+
 <!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>
-[kamran@kworkhorse minikube]$ 
 ```
 
 
@@ -885,77 +932,18 @@ The problematic annotation in the definition of the ingress object is this one:
 . . . 
 ``` 
 
-The above annotation forces the target to be re-written, which messes up with the URL we are trying to reach, and instead of reaching `/sample` on the tomcat service, we are redirected to `/` . To fix this, simply remove this annotation section from your yaml file. And re-deploy the ingress-object. 
+The above annotation forces the target to be re-written, which messes up with the URL we are trying to reach, and instead of reaching `/sample` on the tomcat service, we are redirected to `/` . To fix this, simply remove this annotation section from your yaml file, and re-deploy the ingress-object. 
 
 
 The nginx ingress controller's rewrite rules are explained here: [https://kubernetes.github.io/ingress-nginx/examples/rewrite/](https://kubernetes.github.io/ingress-nginx/examples/rewrite/)
 
-# As a developer - How to update `/etc/hosts` easily:
-Updating `/etc/hosts` file is sometimes cumbersome, because each time you need to do: `sudo vi /etc/hosts` , then type your password, and so on. There are two ways to make your life easy.
-
-## Method 1: Run a "dedicated"/"separate" terminal as root all the time:
-At any given time, I usually have 5-7 text terminals tabs open in the same terminal window; and the first one is always running as `root`. I always login as `root` on the first terminal tab using `sudo -i` and typing in my password *once*. After that whenever any operation on my OS requires `root` privileges, I simply go to that tab and run that over there. Simple and easy. Here is what is looks like:
-
-
-| ![images/text-terminal.png](images/text-terminal.png) |
-| ----------------------------------------------------- |
-
-
-## Method 2: Adjust permissions of `/etc/hosts` so it is writable by you:
-Some people may raise eyebrows when they read this, but this is actually safe to do. 
-
-By default, the file `/etc/host` has following ownership and permissions:
-```
-[root@kworkhorse ~]# ls -l /etc/hosts
--rw-r--r-- 1 root root 660 Apr 22 13:19 /etc/hosts
-[root@kworkhorse ~]#
-```
-The above output means that the user `root` is the owner of this file. Also there is (sort of) group ownership of the group `root` on this file. From permissions perspective, the file is readable and writable by the owner (`root`) . The file is readable (read-only) by the members of group `root` , and the file is read-only for *"others"* ("rest of the world").   
-
-What you can do is, change the ownership of the file `/etc/hosts` to your user, and at the same time allow the members of the group `root` to be able to write to this file. Doing it this way, will enable you to modify this file as a regular user "at will", without needing to type `sudo` all the time, resulting in your development work-flow becoming faster. After this change, you can even keep this file open in your IDE/text-editor in a separate dedicated tab, and whenever you want to make a change to it, you simply make the changes in it, and just save the file. 
-
-I don't see any security problem in doing this. It is a safe operation. If anyone says otherwise, come talk to me. :)
-
-Here is how you do it - once as `sudo` / `root`.
-
-First, make a copy of the file:
-```
-[kamran@kworkhorse ~]$ sudo -i
-[sudo] password for kamran:
-
-[root@kworkhorse ~]# cp /etc/hosts /etc/hosts.orig
-```
-
-Then change the ownership and permissions of this file:
-```
-[root@kworkhorse ~]# chown kamran:root /etc/hosts
-[root@kworkhorse ~]# chmod g+w /etc/hosts
-```
-
-Verify the changes:
-```
-[root@kworkhorse ~]# ls -l /etc/hosts
--rw-rw-r-- 1 kamran root 660 Apr 22 13:19 /etc/hosts
-[root@kworkhorse ~]# 
-```
-
-Congratulations! Now open this file in your IDE (as regular user). I sometimes keep it open in [geany](https://geany.org/) as my first tab. Here is how it looks like:
-
-| ![images/etc-hosts-in-ide.png](images/etc-hosts-in-ide.png) |
-| ----------------------------------------------------------- |
-
-Notice that I have multiple files open in my IDE, the first one is `/etc/hosts` , everything as normal user `kamran`. 
-
-**Note:** In case you ever mess with this file, you can always fill it with fresh entries. The **only line** that must always be there in this file, (as a first line), is the following. So everything else in this file can go away, but the line below must remain intact.
-```
-127.0.0.1   localhost   localhost.localdomain
-```
 
 ## Warning about the `ingress-dns` addon:
 There is an `ingress-dns` addon available with minikube. You will see it in **disabled** state in the list when you type in `minikube addons list`
 
 ```
-[kamran@kworkhorse ~]$ minikube addons list
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube addons list
 |-----------------------------|----------|--------------|
 |         ADDON NAME          | PROFILE  |    STATUS    |
 |-----------------------------|----------|--------------|
@@ -979,7 +967,6 @@ There is an `ingress-dns` addon available with minikube. You will see it in **di
 | storage-provisioner         | minikube | enabled ✅   |
 | storage-provisioner-gluster | minikube | disabled     |
 |-----------------------------|----------|--------------|
-[kamran@kworkhorse ~]$ 
 ```
 
 You may be tempted to enable it, but it is actually not that useful. It is an attempt/hack by someone to solve the problem of updating `/etc/hosts` described in the previous section. The details of this add-on are here: [https://github.com/kubernetes/minikube/tree/master/deploy/addons/ingress-dns](https://github.com/kubernetes/minikube/tree/master/deploy/addons/ingress-dns)
@@ -997,27 +984,15 @@ If you want to develop helm charts, or just want to use existing ones, you will 
 ## Helm version 3:
 Helm 3.2 is the latest at the time this document was written. To be able to use Helm , you simply install it for your operating system using the instructions from this URL: [https://helm.sh/docs/intro/install/](https://helm.sh/docs/intro/install/) . 
 
-
 Basically it is the following simple steps:
-* Download your desired version
-* Unpack it (`tar -zxf filename.tar.gz`)
-* Find the helm binary in the unpacked directory (`linux-amd64`), and move it to `/usr/local/bin`
-
-
-Perform these steps as user `root` or use `sudo`:
-```
-[root@kworkhorse ~]# curl -LO https://get.helm.sh/helm-v3.2.0-linux-amd64.tar.gz
-
-[root@kworkhorse ~]# tar xzf helm-v3.2.0-linux-amd64.tar.gz
-
-[root@kworkhorse ~]# mv linux-amd64/helm /usr/local/bin/
-```
+* Download the binary for windows from: [https://get.helm.sh/helm-v3.2.0-windows-amd64.zip](https://get.helm.sh/helm-v3.2.0-windows-amd64.zip)
+* Unpack/unzip it, and put it inside `C:\Windows\Program Files\Kubernetes\Minikube\`
 
 Check helm version at any given time:
 ```
-[kamran@kworkhorse ~]$ helm version
-version.BuildInfo{Version:"v3.2.0", GitCommit:"e11b7ce3b12db2941e90399e874513fbd24bcb71", GitTreeState:"clean", GoVersion:"go1.13.10"}
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm version
+version.BuildInfo{Version:"v3.1.3", GitCommit:"0a9a9a88e8afd6e77337a3e2ad744756e191429a", GitTreeState:"clean", GoVersion:"go1.13.10"}
 ```
 
 That's it, you are good to start using helm. But, "What about tiller?". Well, Tiller has been removed in Helm version 3.x! You don't need tiller in your cluster anymore, if you are using helm v-3.x . See details here: [https://helm.sh/blog/helm-3-released/](https://helm.sh/blog/helm-3-released/) . 
@@ -1027,37 +1002,18 @@ You don't need minikube's "helm-tiller" add-on in your minikube cluster, if you 
 ## Helm version 2:
 In case you want to use helm 2.x, for whatever reason, you need **helm 2.x** binary on your local computer, and it's server component **tiller** installed inside the kubernetes cluster. 
 
-Installing `helm` v2 on your local computer is done in the same way as described above, except that the tarball will be of `v2` instead of `v3`.
+Installing `helm` v2 on your local computer is done in the same way as described above, except that the zip file will be of `v2` instead of `v3`.
 
 Basically it is the following simple steps:
-* Download your desired version
-* Unpack it (`tar -zxf filename.tar.gz`)
-* Find the helm binary in the unpacked directory (`linux-amd64`), and move it to `/usr/local/bin`
-
-
-Perform these steps as user `root` or use `sudo`:
-```
-[root@kworkhorse ~]# curl -LO https://get.helm.sh/helm-v2.16.6-linux-amd64.tar.gz
-
-[root@kworkhorse ~]# tar xzf helm-v2.16.6-linux-amd64.tar.gz
-
-[root@kworkhorse ~]# mv linux-amd64/helm /usr/local/bin/
-```
+* Download the binary for windows from: [https://get.helm.sh/helm-v2.16.6-windows-amd64.zip](https://get.helm.sh/helm-v2.16.6-windows-amd64.zip)
+* Unpack/unzip it, and put it inside `C:\Windows\Program Files\Kubernetes\Minikube\`
 
 Then, to install `tiller` on the minikube cluster, simply install the `helm-tiller` add-on, and you are good to go.
 
 ```
-[kamran@kworkhorse ~]$ minikube addons enable helm-tiller
-🌟  The 'helm-tiller' addon is enabled
-[kamran@kworkhorse ~]$ 
-```
-
-Verify helm version:
-```
-[kamran@kworkhorse ~]$ helm version
-Client: &version.Version{SemVer:"v2.16.6", GitCommit:"dd2e5695da88625b190e6b22e9542550ab503a47", GitTreeState:"clean"}
-Server: &version.Version{SemVer:"v2.16.3", GitCommit:"1ee0254c86d4ed6887327dabed7aa7da29d7eb0d", GitTreeState:"clean"}
-[kamran@kworkhorse ~]$ 
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube addons enable helm-tiller
+*  The 'helm-tiller' addon is enabled
 ```
 
 
@@ -1067,15 +1023,16 @@ Server: &version.Version{SemVer:"v2.16.3", GitCommit:"1ee0254c86d4ed6887327dabed
 Before you are able to actually use helm to deploy an existing helm chart, you will need to add it's repository URL.
 
 ```
-[kamran@kworkhorse ~]$ helm repo add stable https://kubernetes-charts.storage.googleapis.com
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm repo add stable https://kubernetes-charts.storage.googleapis.com
 "stable" has been added to your repositories
-[kamran@kworkhorse ~]$ 
 ```
 
 Then you can list all available charts/packages in a particular repository, or search for a particular one.
 
 ``` 
-[kamran@kworkhorse ~]$ helm search repo stable
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm search repo stable
 NAME                                 	CHART VERSION	APP VERSION            	DESCRIPTION                                       
 stable/acs-engine-autoscaler         	2.2.2        	2.1.1                  	DEPRECATED Scales worker nodes within agent pools 
 stable/aerospike                     	0.3.2        	v4.5.0.5               	A Helm chart for Aerospike in Kubernetes          
@@ -1089,52 +1046,52 @@ stable/artifactory                   	7.3.1        	6.1.0                  	DEPR
 . . . 
 stable/zeppelin                      	1.1.0        	0.7.2                  	Web-based notebook that enables data-driven, in...
 stable/zetcd                         	0.1.9        	0.0.3                  	CoreOS zetcd Helm chart for Kubernetes            
-[kamran@kworkhorse ~]$ 
 ```
 
 Or:
 
 ```
-[kamran@kworkhorse ~]$ helm search repo postgres
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm search repo postgres
 NAME                               	CHART VERSION	APP VERSION	DESCRIPTION                                       
 stable/postgresql                  	8.6.4        	11.7.0     	DEPRECATED Chart for PostgreSQL, an object-rela...
 stable/prometheus-postgres-exporter	1.3.0        	0.8.0      	A Helm chart for prometheus postgres-exporter     
 stable/pgadmin                     	1.2.2        	4.18.0     	pgAdmin is a web based administration tool for ...
 stable/stolon                      	1.5.9        	0.13.0     	Stolon - PostgreSQL cloud native High Availabil...
 stable/gcloud-sqlproxy             	0.6.1        	1.11       	DEPRECATED Google Cloud SQL Proxy                 
-[kamran@kworkhorse ~]$ 
 ```
 
 
 Lets install wordpress helm chart. First, we need to check if it exists:
 
 ```
-[kamran@kworkhorse ~]$ helm search repo wordpress
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm search repo wordpress
 NAME            	CHART VERSION	APP VERSION	DESCRIPTION                                       
 stable/wordpress	9.0.3        	5.3.2      	DEPRECATED Web publishing platform for building...
-[kamran@kworkhorse ~]$ 
 ```
 
 We see that there is a chart, but it is deprecated. Bitnami is maintaining the latest wordpress helm chart. So we add Bitnami's helm repo.
 
 ```
-[kamran@kworkhorse ~]$ helm repo add bitnami https://charts.bitnami.com/bitnami
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm repo add bitnami https://charts.bitnami.com/bitnami
 "bitnami" has been added to your repositories
-[kamran@kworkhorse ~]$ 
 ```
 
 Then, we search for, and install the wordpress chart from bitnami:
 
 ```
-[kamran@kworkhorse ~]$ helm search repo bitnami/wordpress
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm search repo bitnami/wordpress
 NAME             	CHART VERSION	APP VERSION	DESCRIPTION                                       
 bitnami/wordpress	9.1.9        	5.4.0      	Web publishing platform for building blogs and ...
-[kamran@kworkhorse ~]$ 
 ```
 
 Download/Install the wordpress chart:
 ```
-[kamran@kworkhorse ~]$ helm install myblog bitnami/wordpress
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm install myblog bitnami/wordpress
 NAME: myblog
 LAST DEPLOYED: Fri Apr 24 00:00:23 2020
 NAMESPACE: default
@@ -1160,35 +1117,35 @@ To access your WordPress site from outside the cluster follow the steps below:
 
   echo Username: user
   echo Password: $(kubectl get secret --namespace default myblog-wordpress -o jsonpath="{.data.wordpress-password}" | base64 --decode)
-[kamran@kworkhorse ~]$ 
 ```
 
 Above deploys the chart, which you can see in `helm list`:
 
 ```
-[kamran@kworkhorse ~]$ helm list
+demouser@windows-10-pro-demo MINGW64 ~
+$ helm list
 NAME  	NAMESPACE	REVISION	UPDATED                                 	STATUS  	CHART          	APP VERSION
 myblog	default  	1       	2020-04-24 00:00:23.499057849 +0200 CEST	deployed	wordpress-9.1.9	5.4.0      
-[kamran@kworkhorse ~]$ 
 ```
 
 The chart deploys a wordpress `deployment` and a mariadb `statefulset`. 
 
 ```
-[kamran@kworkhorse ~]$ kubectl get pods
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get pods
 NAME                                READY   STATUS    RESTARTS   AGE
 multitool-5dd8699c59-z5kdn          1/1     Running   0          35h
 myblog-mariadb-0                    1/1     Running   0          102s
 myblog-wordpress-74c676dccd-45trh   0/1     Running   0          102s
 nginx-745b4df97d-wjrtr              1/1     Running   0          3d2h
 tomcat-78d49d44d-vlcqb              1/1     Running   0          34h
-[kamran@kworkhorse ~]$
 ```
 
 It also sets up the wordpress service as type load-balancer:
 
 ```
-[kamran@kworkhorse ~]$ kubectl get svc
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get svc
 NAME               TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
 kubernetes         ClusterIP      10.96.0.1        <none>          443/TCP                      7d1h
 multitool          ClusterIP      10.102.171.156   <none>          80/TCP                       35h
@@ -1196,13 +1153,13 @@ myblog-mariadb     ClusterIP      10.106.159.63    <none>          3306/TCP     
 myblog-wordpress   LoadBalancer   10.96.159.46     <pending>       80:30356/TCP,443:30938/TCP   2m16s
 nginx              LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP                 2d3h
 tomcat             ClusterIP      10.105.43.47     <none>          8080/TCP                     34h
-[kamran@kworkhorse ~]$ 
 ```
 
 You can access this wordpress service, if you run `minikube tunnel` in a separate terminal, as a regular user. As soon as you run it, come back to the previous terminal, check the services again, and you will see that the wordpress service's loadBalancer has an IP address!
 
 ```
-[kamran@kworkhorse ~]$ kubectl get svc
+demouser@windows-10-pro-demo MINGW64 ~
+$ kubectl get svc
 NAME               TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                      AGE
 kubernetes         ClusterIP      10.96.0.1        <none>          443/TCP                      7d1h
 multitool          ClusterIP      10.102.171.156   <none>          80/TCP                       35h
@@ -1210,15 +1167,14 @@ myblog-mariadb     ClusterIP      10.106.159.63    <none>          3306/TCP     
 myblog-wordpress   LoadBalancer   10.96.159.46     10.96.159.46    80:30356/TCP,443:30938/TCP   5m20s
 nginx              LoadBalancer   10.106.130.70    10.106.130.70   80:32185/TCP                 2d3h
 tomcat             ClusterIP      10.105.43.47     <none>          8080/TCP                     34h
-[kamran@kworkhorse ~]$ 
 ```
 
 Access this IP from a browser in your host computer, and you will see your wordpress blog site. To access admin panel, you will need the password of the admin user, which the wordpress helm chart shows how to obtain - in the `Notes`. 
 
 ```
-[kamran@kworkhorse ~]$ echo Password: $(kubectl get secret --namespace default myblog-wordpress -o jsonpath="{.data.wordpress-password}" | base64 --decode)
+demouser@windows-10-pro-demo MINGW64 ~
+$ echo Password: $(kubectl get secret --namespace default myblog-wordpress -o jsonpath="{.data.wordpress-password}" | base64 --decode)
 Password: TGERAY7mzZ
-[kamran@kworkhorse ~]$ 
 ```
 
 | ![images/wordpress-helm-1.png](images/wordpress-helm-1.png) |
