@@ -7,5 +7,7 @@ This document is divided into several parts:
 * [Part 4](Migration-Part-4.md) - Using [GitLab CI/CD](https://gitlab.com/) to automatically deploy a simple HTML/PHP application in Kubernetes. 
 
 Other articles/guides:
-* [Minikube basics](Minikube-on-Fedora.md) - Use Kubernetes on local Linux machine for learning. (Uses Fedora Linux and KVM)
+* [Minikube basics - Linux](Minikube-on-Fedora.md) - Use Kubernetes on local Linux machine for learning. (Uses Fedora Linux and KVM)
+* [Minikube basics - Windows](Minikube-on-Windows.md) - Use Kubernetes on local Linux machine for learning. (Uses Windows 10 Professional and Hyper-V)
 * [Minikube internals/advanced concepts](Minikube-Internals-Fedora.md) - Deep dive into "How minikube works?" - (Concepts explained using Fedora Linux and KVM)
+
