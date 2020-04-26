@@ -193,7 +193,6 @@ kube-system            storage-provisioner                          0m          
 kube-system            tiller-deploy-58bf6f4995-nvwc6               0m           6Mi             
 kubernetes-dashboard   dashboard-metrics-scraper-84bfdf55ff-jtp2z   0m           4Mi             
 kubernetes-dashboard   kubernetes-dashboard-bc446cc64-wccx9         0m           7Mi             
-[kamran@kworkhorse ~]$ 
 ```
 
 The plugins you enable will show up as pods in the `kube-system` name-space.
@@ -855,7 +854,7 @@ Lets access tomcat from the host:
 ```
 demouser@windows-10-pro-demo MINGW64 ~
 $ curl tomcat.example.com
-<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>[kamran@kworkhorse minikube]$
+<!doctype html><html lang="en"><head><title>HTTP Status 404 – Not Found</title><style type="text/css">body {font-family:Tahoma,Arial,sans-serif;} h1, h2, h3, b {color:white;background-color:#525D76;} h1 {font-size:22px;} h2 {font-size:16px;} h3 {font-size:14px;} p {font-size:12px;} a {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style></head><body><h1>HTTP Status 404 – Not Found</h1><hr class="line" /><p><b>Type</b> Status Report</p><p><b>Message</b> Not found</p><p><b>Description</b> The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.</p><hr class="line" /><h3>Apache Tomcat/9.0.34</h3></body></html>
 ```
 
 Hurray! We can reach `tomcat.example.com` ! 
