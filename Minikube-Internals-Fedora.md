@@ -9,8 +9,8 @@ By default, KVM (libvirt) sets up a virtual network on your Linux host, and call
 
 When you install `minikube` , it creates an additional **isolated** virtual network inside KVM, and connects the minikube VM to both of these networks. i.e. it attaches itself to the NAT network as well as the isolated network. Like so:
 
-| ![images/minikube-network.png](images/minikube-network.png) |
-| ----------------------------------------------------------- |
+| ![images/minikube-network-kvm.png](images/minikube-network-kvm.png) |
+| ------------------------------------------------------------------- |
 
 
 # Why minikube uses two different networks on the host?

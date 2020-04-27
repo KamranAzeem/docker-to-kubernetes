@@ -5,8 +5,8 @@ The emphasis is on having minikube *running as a VM*, (not as a process on docke
 
 Here is how the minikube VM setup looks like:
 
-| ![images/minikube-network.png](images/minikube-network.png) |
-| ----------------------------------------------------------- |
+| ![images/minikube-network-kvm.png](images/minikube-network-kvm.png) |
+| ------------------------------------------------------------------- |
 
 ## What do you need to get it to work?
 You need decently powered computer, with following specs:

@@ -5,7 +5,7 @@ The emphasis is on having minikube *running as a VM*, (not as a process on docke
 
 Here is how the minikube VM setup looks like:
 
-| ![images/minikube-network-windows-hyperv.png](images/minikube-network-windows-hyperv.png) |
+| ![images/minikube-network-hyperv.png](images/minikube-network-hyperv.png) |
 | ----------------------------------------------------------------------------------------- |
 
 ## What do you need to get it to work?
