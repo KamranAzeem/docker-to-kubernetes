@@ -12,7 +12,6 @@ When you install `minikube` , it creates an additional **isolated** virtual netw
 | ![images/minikube-network-kvm.png](images/minikube-network-kvm.png) |
 | ------------------------------------------------------------------- |
 
-
 # Why minikube uses two different networks on the host?
 Basically, I found no documentation on this topic so far. Minikube's documentation is completely silent about it. It is not discussed in any discussion forums, or GitHub issues, etc. Some people have asked somewhat similar questions, but either the discussion went into another direction, or the issue/thread simply died. So, I eventually asked [the question](https://github.com/kubernetes/minikube/issues/7848).   
 
@@ -31,7 +30,7 @@ The minikube bootstrap process talks to the Hypervisor - KVM in our case - and d
 * size of disk
 * network cards, and the network to which each network card connects
 
-When you pass the `--driver=kvm2` on the `minikube start` command, minikube configures itself to talk to KVM to get things done. That handles the *"talking to the Hypervisor"* part. When the VM is being created, the DHCP services serving/attached to each virtual network, assigns an IP address to the corresponding network interface on the VM. This IP address can be queried/obtained directly from the hypervisor. e.g.
+When you pass the `--driver=kvm2` on the `minikube start` command, minikube configures itself to talk to KVM to get things done. That handles the *"talking to the Hypervisor"* part. When the VM is being created, the DHCP services serving/attached to each virtual network, assign an IP address to the corresponding network interface on the VM. This IP address can be queried/obtained directly from the hypervisor. e.g.
 
 ```
 [root@kworkhorse ~]# virsh net-list
@@ -59,6 +58,24 @@ When you pass the `--driver=kvm2` on the `minikube start` command, minikube conf
 
 [root@kworkhorse ~]# 
 ```
+
+Here are the two networks showing up in Virtual Machine Manager's graphical interface.
+
+| ![images/vmm-default-network.png](images/vmm-default-network.png) |
+| ----------------------------------------------------------------- |
+
+| ![images/vmm-isolated-network.png](images/vmm-isolated-network.png) |
+| ------------------------------------------------------------------- |
+
+
+The minikube VM has two (virtual) network cards, one connected to the default/NAT network, and the other connected to the isolated network.
+
+| ![images/minikube-vm-network-card-NAT.png](images/minikube-vm-network-card-NAT.png) |
+| --------------------------------------------------------------------------------------------- |
+
+| ![images/minikube-vm-network-card-isolated.png](images/minikube-vm-network-card-isolated.png) |
+| --------------------------------------------------------------------------------------------- |
+
 
 **Note:** The minikube (main) IP address discussed everywhere in this document is `192.168.39.174` . Also, whenever it says "minikube IP", it is that the "minikube IP" from the *"isolated network"* is being discussed/referenced.
 
