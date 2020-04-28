@@ -519,11 +519,121 @@ KUBE-SEP-Z5JB7O4CUBWMYZUU  all  --  anywhere             anywhere             /*
 # 
 ```
 
-
 That's a lot of tricks!
+
  
+## Whats running inside minikube? and how?
+Minikube is a very cut down version of Linux, which uses `systemd` as it's `init` system. It uses `docker` to bring up all the Kubernetes components as containers. The process is relatively simple. The Kernel boots up, it starts `systemd`. Systemd starts up necessary services, such as network interfaces, and most importantly `docker` and `kubelet` services. Kubelet reads definition and configuration of various Kubernetes components from the `/etc/kubernetes/manifests/` and `/var/lib/kubelet` directories, and brings them up as pods/containers.
 
 
+```
+# ls -l /etc/kubernetes/manifests/
+total 16
+-rw------- 1 root root 1919 Apr 28 03:56 etcd.yaml
+-rw------- 1 root root 2997 Apr 28 03:56 kube-apiserver.yaml
+-rw------- 1 root root 2516 Apr 28 03:56 kube-controller-manager.yaml
+-rw------- 1 root root 1120 Apr 28 03:56 kube-scheduler.yaml
+```
+
+```
+# systemctl list-units *.service is-active --state=running
+UNIT                       LOAD   ACTIVE SUB     DESCRIPTION                            
+dbus.service               loaded active running D-Bus System Message Bus               
+docker.service             loaded active running Docker Application Container Engine    
+getty@tty1.service         loaded active running Getty on tty1                          
+kubelet.service            loaded active running kubelet: The Kubernetes Node Agent     
+nfs-mountd.service         loaded active running NFS Mount Daemon                       
+rpc-statd.service          loaded active running NFS status monitor for NFSv2/3 locking.
+rpcbind.service            loaded active running RPC bind service                       
+serial-getty@ttyS0.service loaded active running Serial Getty on ttyS0                  
+sshd.service               loaded active running OpenSSH server daemon                  
+systemd-journald.service   loaded active running Journal Service                        
+systemd-logind.service     loaded active running Login Service                          
+systemd-networkd.service   loaded active running Network Service                        
+systemd-resolved.service   loaded active running Network Name Resolution                
+systemd-timesyncd.service  loaded active running Network Time Synchronization           
+systemd-udevd.service      loaded active running udev Kernel Device Manager             
+```
+
+
+Here are all the services running on the minikube VM listening on various network interfaces and ports:
+```
+# ss -ntlp
+State  Recv-Q  Send-Q     Local Address:Port    Peer Address:Port                                               
+LISTEN 0       0              127.0.0.1:10259        0.0.0.0:*      users:(("kube-scheduler",pid=3647,fd=6))    
+LISTEN 0       0             127.0.0.53:53           0.0.0.0:*      users:(("systemd-resolve",pid=1750,fd=17))  
+LISTEN 0       0                0.0.0.0:22           0.0.0.0:*      users:(("sshd",pid=1864,fd=3))              
+LISTEN 0       0                0.0.0.0:49015        0.0.0.0:*      users:(("rpc.mountd",pid=1793,fd=12))       
+LISTEN 0       0                0.0.0.0:47165        0.0.0.0:*      users:(("rpc.statd",pid=1794,fd=9))         
+LISTEN 0       0                0.0.0.0:2049         0.0.0.0:*                                                  
+LISTEN 0       0              127.0.0.1:36291        0.0.0.0:*      users:(("kubelet",pid=2667,fd=9))           
+LISTEN 0       0                0.0.0.0:60165        0.0.0.0:*      users:(("rpc.mountd",pid=1793,fd=16))       
+LISTEN 0       0              127.0.0.1:10248        0.0.0.0:*      users:(("kubelet",pid=2667,fd=31))          
+LISTEN 0       0         192.168.39.204:10249        0.0.0.0:*      users:(("kube-proxy",pid=4619,fd=13))       
+LISTEN 0       0                0.0.0.0:39337        0.0.0.0:*                                                  
+LISTEN 0       0         192.168.39.204:2379         0.0.0.0:*      users:(("etcd",pid=3723,fd=6))              
+LISTEN 0       0              127.0.0.1:2379         0.0.0.0:*      users:(("etcd",pid=3723,fd=5))              
+LISTEN 0       0                0.0.0.0:46187        0.0.0.0:*      users:(("rpc.mountd",pid=1793,fd=8))        
+LISTEN 0       0                0.0.0.0:5355         0.0.0.0:*      users:(("systemd-resolve",pid=1750,fd=12))  
+LISTEN 0       0         192.168.39.204:2380         0.0.0.0:*      users:(("etcd",pid=3723,fd=3))              
+LISTEN 0       0              127.0.0.1:2381         0.0.0.0:*      users:(("etcd",pid=3723,fd=11))             
+LISTEN 0       0                0.0.0.0:111          0.0.0.0:*      users:(("rpcbind",pid=1758,fd=8))           
+LISTEN 0       0              127.0.0.1:10257        0.0.0.0:*      users:(("kube-controller",pid=3698,fd=6))   
+LISTEN 0       0                      *:60435              *:*      users:(("rpc.mountd",pid=1793,fd=14))       
+LISTEN 0       0                      *:22                 *:*      users:(("sshd",pid=1864,fd=4))              
+LISTEN 0       0                      *:443                *:*      users:(("docker-proxy",pid=4667,fd=4))      
+LISTEN 0       0                      *:8443               *:*      users:(("kube-apiserver",pid=3716,fd=5))    
+LISTEN 0       0                      *:45853              *:*      users:(("rpc.mountd",pid=1793,fd=18))       
+LISTEN 0       0                      *:18080              *:*      users:(("docker-proxy",pid=4580,fd=4))      
+LISTEN 0       0                      *:36577              *:*                                                  
+LISTEN 0       0                      *:2049               *:*                                                  
+LISTEN 0       0                      *:44193              *:*      users:(("rpc.statd",pid=1794,fd=11))        
+LISTEN 0       0                      *:34503              *:*      users:(("rpc.mountd",pid=1793,fd=10))       
+LISTEN 0       0                      *:2376               *:*      users:(("dockerd",pid=1959,fd=6))           
+LISTEN 0       0                      *:10250              *:*      users:(("kubelet",pid=2667,fd=28))          
+LISTEN 0       0                      *:10251              *:*      users:(("kube-scheduler",pid=3647,fd=5))    
+LISTEN 0       0                      *:5355               *:*      users:(("systemd-resolve",pid=1750,fd=14))  
+LISTEN 0       0                      *:10252              *:*      users:(("kube-controller",pid=3698,fd=5))   
+LISTEN 0       0                      *:111                *:*      users:(("rpcbind",pid=1758,fd=11))          
+LISTEN 0       0                      *:10256              *:*      users:(("kube-proxy",pid=4619,fd=12))       
+LISTEN 0       0                      *:80                 *:*      users:(("docker-proxy",pid=4761,fd=4))      
+# 
+```
+
+All the Kubernetes components run as containers on Docker engine:
+```
+# docker ps
+CONTAINER ID        IMAGE                             COMMAND                  CREATED             STATUS              PORTS                                                                NAMES
+e71f60888893        cdc71b5a8a0e                      "/dashboard --insecu…"   8 hours ago         Up 8 hours                                                                               k8s_kubernetes-dashboard_kubernetes-dashboard-bc446cc64-n7k6l_kubernetes-dashboard_b28f5083-c5e7-4a5c-8351-764ac4ff0540_7
+ea720575d1d2        67da37a9a360                      "/coredns -conf /etc…"   8 hours ago         Up 8 hours                                                                               k8s_coredns_coredns-66bff467f8-5h9jv_kube-system_df45e213-13ca-4749-8c12-46223f1596ae_5
+1f2f8e4d2244        praqma/network-multitool          "/docker-entrypoint.…"   8 hours ago         Up 8 hours                                                                               k8s_multitool_multitool-5dd8699c59-5vpq7_default_29cd35d0-8475-4a42-bbd6-93d5c971fd11_2
+17d4d64c8edb        k8s.gcr.io/metrics-server-amd64   "/metrics-server --s…"   8 hours ago         Up 8 hours                                                                               k8s_metrics-server_metrics-server-7bc6d75975-hqfvx_kube-system_dcc6e4e6-e879-4a7f-9cd1-ab8fc6770b72_2
+b5b9cb34487e        29024c9c6e70                      "/usr/bin/dumb-init …"   8 hours ago         Up 8 hours                                                                               k8s_nginx-ingress-controller_nginx-ingress-controller-6d57c87cb9-td2mb_kube-system_cc5364dd-625d-41cd-b535-ed0fbc7006e4_3
+d548712b4926        29b49a39bc47                      "nginx -g 'daemon of…"   8 hours ago         Up 8 hours                                                                               k8s_nginx_nginx-745b4df97d-m2thw_default_0b0a4cf4-56de-4f5f-90da-ca03f9100f8c_2
+602a169eb23e        67da37a9a360                      "/coredns -conf /etc…"   8 hours ago         Up 8 hours                                                                               k8s_coredns_coredns-66bff467f8-x5mbc_kube-system_4c10165d-e637-4229-82d4-6c63c36cb875_4
+6aacd9287f02        3b08661dc379                      "/metrics-sidecar"       8 hours ago         Up 8 hours                                                                               k8s_dashboard-metrics-scraper_dashboard-metrics-scraper-84bfdf55ff-54tkg_kubernetes-dashboard_b0f901f8-7b32-4314-ac9d-67fa7fdf1779_2
+e406585e72dc        4689081edb10                      "/storage-provisioner"   8 hours ago         Up 8 hours                                                                               k8s_storage-provisioner_storage-provisioner_kube-system_064d5b1d-2606-400b-a03f-12b68dda80fd_6
+c66b18deb44b        43940c34f24f                      "/usr/local/bin/kube…"   8 hours ago         Up 8 hours                                                                               k8s_kube-proxy_kube-proxy-kb9dn_kube-system_28fa266f-98a7-4b0e-9e89-a02e9192565c_3
+5752db84f24c        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours          0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp, 0.0.0.0:18080->18080/tcp   k8s_POD_nginx-ingress-controller-6d57c87cb9-td2mb_kube-system_cc5364dd-625d-41cd-b535-ed0fbc7006e4_2
+e34b3154663d        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_nginx-745b4df97d-m2thw_default_0b0a4cf4-56de-4f5f-90da-ca03f9100f8c_2
+6eb1aaee6b3f        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_multitool-5dd8699c59-5vpq7_default_29cd35d0-8475-4a42-bbd6-93d5c971fd11_2
+2a3a6a813f3d        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_storage-provisioner_kube-system_064d5b1d-2606-400b-a03f-12b68dda80fd_3
+f93fc1175a0c        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_dashboard-metrics-scraper-84bfdf55ff-54tkg_kubernetes-dashboard_b0f901f8-7b32-4314-ac9d-67fa7fdf1779_2
+26a4bf6a3c56        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_kube-proxy-kb9dn_kube-system_28fa266f-98a7-4b0e-9e89-a02e9192565c_3
+9c8303de102a        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_metrics-server-7bc6d75975-hqfvx_kube-system_dcc6e4e6-e879-4a7f-9cd1-ab8fc6770b72_2
+1b77c4b54248        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_coredns-66bff467f8-x5mbc_kube-system_4c10165d-e637-4229-82d4-6c63c36cb875_3
+40d5067ac14b        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_kubernetes-dashboard-bc446cc64-n7k6l_kubernetes-dashboard_b28f5083-c5e7-4a5c-8351-764ac4ff0540_2
+464f957ae6f9        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_coredns-66bff467f8-5h9jv_kube-system_df45e213-13ca-4749-8c12-46223f1596ae_3
+d59f2d9ac062        74060cea7f70                      "kube-apiserver --ad…"   8 hours ago         Up 8 hours                                                                               k8s_kube-apiserver_kube-apiserver-minikube_kube-system_e3825a84cae5040593217ea51e75f9c4_3
+d905d60d3537        303ce5db0e90                      "etcd --advertise-cl…"   8 hours ago         Up 8 hours                                                                               k8s_etcd_etcd-minikube_kube-system_e47d1bdb22c8c22e64ebb5bcf3e89710_3
+5051489ad5ab        d3e55153f52f                      "kube-controller-man…"   8 hours ago         Up 8 hours                                                                               k8s_kube-controller-manager_kube-controller-manager-minikube_kube-system_3016593d20758bbfe68aba26604a8e3d_3
+9b249d0d8647        a31f78c7c8ce                      "kube-scheduler --au…"   8 hours ago         Up 8 hours                                                                               k8s_kube-scheduler_kube-scheduler-minikube_kube-system_5795d0c442cb997ff93c49feeb9f6386_3
+38a416f0916c        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_kube-controller-manager-minikube_kube-system_3016593d20758bbfe68aba26604a8e3d_3
+37c4d1221753        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_kube-apiserver-minikube_kube-system_e3825a84cae5040593217ea51e75f9c4_3
+0ede377faadc        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_etcd-minikube_kube-system_e47d1bdb22c8c22e64ebb5bcf3e89710_3
+46b52c57daf1        k8s.gcr.io/pause:3.2              "/pause"                 8 hours ago         Up 8 hours                                                                               k8s_POD_kube-scheduler-minikube_kube-system_5795d0c442cb997ff93c49feeb9f6386_3
+# 
+```
 
 
 ## Some minikube config files under your home directory:
@@ -660,7 +770,7 @@ Some of the information about how the minikube VM is setup, and how the kubernet
 ```
 
 ## MiniKube log files:
-On the host (i.e. your work computer), minikube logs in `/tmp/minikube.INFO` and `/tmp/minikube.WARNING` files. These files are rotated each time minikube is stopped and started. So the above are basically symlinks to the latest files.
+On the host (i.e. your work computer), minikube logs in `/tmp/minikube.INFO` and `/tmp/minikube.WARNING` files. These files are rotated each time minikube is stopped and started. So the above are basically symbolic links to the latest files.
 
 ```
 [kamran@kworkhorse ~]$ cd /tmp
