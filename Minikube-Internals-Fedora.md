@@ -37,6 +37,7 @@ When you pass the `--driver=kvm2` on the `minikube start` command, minikube conf
  Name              State    Autostart   Persistent
 ----------------------------------------------------
  default           active   yes         yes
+ k8s-kubeadm-net   active   yes         yes
  minikube-net      active   yes         yes
 ```
 
@@ -172,8 +173,8 @@ Name:	wbitt.com
 Address: 18.184.217.120
 ```
 
-### ssh connectivity:
-During the bootstrap process, minikube creates a RSA key-pair in `.minikube/machines/minikube/` on your host computer, and places the public key of that key-pair inside the VM, under user docker's home directory. You can use this key-pair to log on to the VM as user `docker`. Actually the `minikube ssh` command also logs you in this VM using the user `docker`.
+### SSH connectivity:
+During the bootstrap process, minikube creates a RSA key-pair in `.minikube/machines/minikube/` on your host computer, and places the public key of that key-pair inside the VM, under user docker's home directory. You can use this key-pair to log on to the VM as user `docker`. Actually the `minikube ssh` command also logs you in this VM using the `docker` user.
 
 **Note:** I noticed that minikube does not do a fingerprint scan of the minikube VM's (main) IP address, and just logs on the the VM if you execute `minikube ssh` command. It uses `-o "StrictHostKeyChecking no"` switch internally for the `minikube ssh` command. That is why, no `known_hosts` file is ever updated with a fingerprint when `minikube ssh` is executed.
 
@@ -241,8 +242,7 @@ $
 
 
 ## The minikube pod network:
-
-Minikube uses the default `docker0` software bridge (on the minikube VM) as it's pod network. When you run your pods on minikube, they get IP addresses from the `docker0` network `172.17.0.0/16` . 
+Minikube does not use any of the [CNI](https://kubernetes.io/docs/concepts/cluster-administration/networking/) plugins for container networking. Instead, it simply uses the default `docker0` software bridge (local on the minikube VM) as it's pod network. When you run your pods on minikube, they get IP addresses from the `docker0` network `172.17.0.0/16` . 
 
 ```
 [kamran@kworkhorse ~]$ kubectl get pods -o wide
@@ -379,10 +379,10 @@ $
 ```
 
 ## The service network (ClusterIPs):
-Minikube uses `10.96.0.0/12` address range for the services it creates. It allows 1,048,574 number of host IPAddresses (about one million), essentially meaning that it supports 1,048,574 amount of cluster services (ClusterIPs). The usable IP address range for this network is: `10.96.0.1 - 10.111.255.254`. That is why you see all these funny looking ClusterIP addresses like `10.106.130.70`), which - visually - do not resemble `10.96.x.y`! But they are from the same network IP range!
+Minikube uses `10.96.0.0/12` address range for the services it creates. You can find it mentioned as `"ServiceCIDR": "10.96.0.0/12"` in the configuration file `~/.minikube/profiles/minikube/config.json` on the host computer. It allows 1,048,574 number of host IPAddresses (about one million), essentially meaning that it supports 1,048,574 amount of cluster services (ClusterIPs). The usable IP address range for this network is: `10.96.0.1 - 10.111.255.254`. That is why you see all these funny looking ClusterIP addresses like `10.106.130.70`), which - visually - do not resemble `10.96.x.y`! But they are from the same network IP range!
 
 ```
-[kamran@kworkhorse ~]$ kubectl --all-namespaces=true get svc
+[kamran@kworkhorse ~]$ kubectl --all-namespaces=true get services
 NAMESPACE              NAME                        TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                  AGE
 default                kubernetes                  ClusterIP      10.96.0.1        <none>        443/TCP                  5d
 default                multitool                   LoadBalancer   10.111.126.81    <pending>     80:31019/TCP             134m
@@ -395,7 +395,7 @@ kubernetes-dashboard   kubernetes-dashboard        ClusterIP      10.100.220.107
 [kamran@kworkhorse ~]$ 
 ```
 
-Below is a screenshot from a popular online subnet calculator.
+Below is a screenshot from a popular online subnet calculator showing the above described calculations.
 
 | ![images/subnet-calculator.png](images/subnet-calculator.png) |
 | ------------------------------------------------------------- |
@@ -547,7 +547,26 @@ Some of the information about how the minikube VM is setup, and how the kubernet
 	"Driver": "kvm2",
 . . . 
 . . . 
-	},
+  "KubernetesConfig": {
+          "KubernetesVersion": "v1.18.0",
+          "ClusterName": "minikube",
+          "APIServerName": "minikubeCA",
+          "APIServerNames": null,
+          "APIServerIPs": null,
+          "DNSDomain": "cluster.local",
+          "ContainerRuntime": "docker",
+          "CRISocket": "",
+          "NetworkPlugin": "",
+          "FeatureGates": "",
+          "ServiceCIDR": "10.96.0.0/12",
+          "ImageRepository": "",
+          "ExtraOptions": null,
+          "ShouldLoadCachedImages": true,
+          "EnableDefaultCNI": false,
+          "NodeIP": "",
+          "NodePort": 0,
+          "NodeName": ""
+  },
 	"Nodes": [
 		{
 			"Name": "m01",
