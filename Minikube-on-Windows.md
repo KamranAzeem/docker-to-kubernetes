@@ -1189,7 +1189,6 @@ Password: TGERAY7mzZ
 Congratulations! Your minikube installation is complete, with necessary features :) You may want to add more add-ons, and/or modify it to your heart's content. But for now, you are all set! 
 
 
-
 # Some limitations of minikube:
 
 * The IP address of the minikube VM may change during subsequent `stop` , `start` operations. But if all you want to do is use `kubectl` to access the cluster inside that VM, then you should not be bothered, as the `minikube start` command updates your local `kube/config` file with the latest IP address of the minikube VM/API-server.
@@ -1201,6 +1200,14 @@ Remember, this (minikube) cluster is supposed to be a **local test cluster**, fo
 # Additional fun stuff:
 * If you don't want to use minikube's built-in LoadBalancer, you can setup your own, such as **MetalLB**. 
 * If you don't want to use minikube's built-in Ingress Controller, you can use your own, such as **Traefik**. 
+
+# Other Windows level configurations/optimizations:
+## Disabled VM checkpoint:
+It is best to disable the VM checkpoint feature for minikube VM. It does not serve any purpose for minikube, and is an overhead. To disable it, go to: `Hyper-V -> minikube VM -> Settings -> Checkpoints`, and disable the main check-box. 
+
+| ![images/hyperv-vm-checkpoint-disabled.png](images/hyperv-vm-checkpoint-disabled.png) |
+| ------------------------------------------------------------------------------------- |
+
 
 
 # Further reading:
