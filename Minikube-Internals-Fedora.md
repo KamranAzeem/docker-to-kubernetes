@@ -14,29 +14,34 @@ When you install `minikube` , it creates an additional **isolated** virtual netw
 
 
 # Why minikube uses two different networks on the host?
-Basically, I found no documentation on this topic so far. Minikube's documentation is completely silent about it. It is not discussed in any discussion forums, or GitHub issues, etc. Some people have asked somewhat similar questions, but either the discussion went into another direction, or the issue/thread simply died.
+Basically, I found no documentation on this topic so far. Minikube's documentation is completely silent about it. It is not discussed in any discussion forums, or GitHub issues, etc. Some people have asked somewhat similar questions, but either the discussion went into another direction, or the issue/thread simply died. So, I eventually asked [the question](https://github.com/kubernetes/minikube/issues/7848).   
 
 Below is my understanding so far. 
 
-I think that minikube simply wants to deliver a development environment **completely local** to your work-computer. It does not want the kubernetes cluster (running inside the minikube VM) to be reached from the any other network. It also does not want to step on anyone else's toes in terms of IP addresses or networking in general - on this computer. That is why it simply sets up a new **"isolated"** virtual network, and sets up the VM to run on this network. Since the minikube VM needs to pull necessary software from the internet, such as `boot2docker.iso` and `minikube-v.x.y.z.iso`, and other things, it also connects the VM to a **NAT** network, which is normally the **default** network on any Hypervisor.
+This is some silliness from `docker-machine`, which has crept into the KVM setup from the VirtualBox setup. Just so you know, minikube uses `docker-machine` internally to setup the VM on a given hypervisor. Now, VirtualBox has very weird networking; and when docker-machine is used to setup a docker environment on VirtualBox, it uses two networks, one to access the VM, and the other for the VM to access the Internet. When `minikube` needed this (docker) setup for KVM, someone from docker-machine team - not confirmed yet, but most probably - copied the same design and applied to KVM/libvirt, which was completely unnecessary, and just complicated things. KVM is very capable, simple and efficient hypervisor, and it does not need any *"workarounds"* . Treating KVM and VirtualBox in the same way is unfair with KVM. 
 
+I later checked minikube on Windows-10/Hyper-V, and found out that minikube's setup *does not* create the additional *isolated network* on Hyper-V the way it did on Linux. Instead it simply uses Hyper-V's *default* network for accessing the minikube VM from the host, and for the minikube VM to access the Internet. Simple! 
+
+I don't know why minikube and/or docker-machine team decided to go the *"two networks"* route for KVM.
+
+## More networking details about the MiniKube VM:
 The minikube bootstrap process talks to the Hypervisor - KVM in our case - and dictates how the VM will be setup, such as:
 * number of CPU cores
 * amount of RAM
 * size of disk
-* network cards, and which network card connects to which network
+* network cards, and the network to which each network card connects
 
-When you pass the `--driver=kvm2` - or whatever Hypervisor you have on your computer - on the `minikube start` command, minikube configures itself to talk to that particular Hypervisor and get things done. That handles the "talking to the Hypervisor" part. When the VM is being created, the DHCP service attached to the virtual network assigns an IP address to it. This IP address can be queried/obtained directly from the hypervisor. e.g.
+When you pass the `--driver=kvm2` on the `minikube start` command, minikube configures itself to talk to KVM to get things done. That handles the *"talking to the Hypervisor"* part. When the VM is being created, the DHCP services serving/attached to each virtual network, assigns an IP address to the corresponding network interface on the VM. This IP address can be queried/obtained directly from the hypervisor. e.g.
 
 ```
 [root@kworkhorse ~]# virsh net-list
  Name              State    Autostart   Persistent
 ----------------------------------------------------
  default           active   yes         yes
- k8s-kubeadm-net   active   yes         yes
  minikube-net      active   yes         yes
+```
 
-
+```
 [root@kworkhorse ~]# virsh net-dhcp-leases minikube-net
  Expiry Time           MAC address         Protocol   IP address          Hostname   Client ID or DUID
 -----------------------------------------------------------------------------------------------------------
@@ -45,13 +50,24 @@ When you pass the `--driver=kvm2` - or whatever Hypervisor you have on your comp
 [root@kworkhorse ~]# 
 ```
 
-The minikube IP address discussed everywhere in this document is `192.168.39.174` .
 
-During the bootstrap process minikube uses this IP address to configure various aspects of kubernetes components, and also places certain SSH keys inside the VM. It then does a ssh fingerprint scan against that IP address and keeps that in your local user's local config files specific to minikue, inside `~/.minikube` directory. It also configures a context for this newly created single-node kubernetes cluster, and places that inside your `~/.kube/config` file - using the same IP. Inside the VM, minikube configures kubernetes API server to only bind to the IP address from the isolated network. 
+```
+[root@kworkhorse ~]# virsh net-dhcp-leases default
+ Expiry Time           MAC address         Protocol   IP address           Hostname   Client ID or DUID
+------------------------------------------------------------------------------------------------------------
+ 2020-04-21 00:32:39   e8:94:3e:a6:a5:a7   ipv4       192.168.122.134/24   minikube   01:e8:94:3e:a6:a5:a7
 
-All of above happens when you use `minikube start --driver=kvm2` command. (The driver can be a different one depending on your hypervisor). Minikube perform all these checks every time you `start` the VM from the stopped state. If, for some reason, the IP changes, minikube bootstrap process updates all necessary file. 
+[root@kworkhorse ~]# 
+```
 
-This is the reason that `minikube ip` command **never** returns you the IP of the VM when the minikube VM is in stopped state. It does not just read the IP from config file and shows it to you. It actually queries the hypervisor each time `minikube ip` command is issued and depending on the VM's state, either shows the IP currently assigned to the VM by KVM's DHCP service, or refuses to show it to you if the VM is found in the stopped state. Below are examples of both cases:
+**Note:** The minikube (main) IP address discussed everywhere in this document is `192.168.39.174` . Also, whenever it says "minikube IP", it is that the "minikube IP" from the *"isolated network"* is being discussed/referenced.
+
+During the bootstrap process minikube uses this (main) IP address to configure various aspects of kubernetes components, and also uses it to place certain SSH keys inside the VM. It then does a ssh fingerprint scan against that IP address and keeps that in your local user's local configuration files specific to minikube, inside `~/.minikube` directory. It also configures a context for this newly created single-node kubernetes cluster, and places that inside your `~/.kube/config` file - using the same IP. Inside the VM, minikube configures kubernetes API server to only bind to the IP address from the isolated network. 
+
+All of above happens when you use `minikube start --driver=kvm2` command. Minikube performs all these checks every time you `start` the VM from the *stopped* state. If, for some reason, the IP changes, minikube bootstrap process updates all necessary files. 
+
+### Minikube IP:
+`minikube ip` command **never** returns you the IP of the VM when the minikube VM is in stopped state. It does not just read the IP from config file and shows it to you. It actually queries the hypervisor each time `minikube ip` command is issued and depending on the VM's state, either shows the IP currently assigned to the VM by KVM's DHCP service (serving/connected to the isolated network), or refuses to show it to you if the VM is found in the stopped state. Below are examples of both cases:
 
 ```
 [kamran@kworkhorse ~]$ minikube ip
@@ -66,9 +82,10 @@ This is the reason that `minikube ip` command **never** returns you the IP of th
 [kamran@kworkhorse ~]$
 ```
 
-By the way, networking perspective, the minikube VM is accessible from the host, over both isolated and NAT networks. It is just that the kubectl commands will expect to connect to the IP of the API server listed in `.kube/config` file. This IP will always be from the isolated network. 
+### Host-VM connectivity:
+The minikube VM is accessible from the host, over *both* **isolated** and **NAT** networks. It is just that the kubectl commands will expect to connect to the IP of the API server listed in `.kube/config` file. This IP will **always** be from/belong-to the isolated network. 
 
-Below I have shown that this VM is accessible using standard network tools over both networks it is connected to. First, I find the IP addresses assigned to this VM by each virtual network's DHCP service.
+Below I have shown that this VM is accessible using standard network tools over both the networks it is connected to. First, I find the IP addresses assigned to this VM by DHCP service on each virtual network.
 
 ```
 [root@kworkhorse ~]# virsh net-dhcp-leases minikube-net
@@ -78,7 +95,6 @@ Below I have shown that this VM is accessible using standard network tools over 
 
 [root@kworkhorse ~]# 
 ```
-
 
 ```
 [root@kworkhorse ~]# virsh net-dhcp-leases default
@@ -115,10 +131,68 @@ rtt min/avg/max/mdev = 0.121/0.140/0.160/0.019 ms
 [root@kworkhorse ~]# 
 ```
 
-Minikube creates a RSA keypair in `.minikube/machines/minikube/`, which I can use to login to the VM as user `docker`. Actually the `minikube ssh` command also logs you in this VM using the user `docker`.
+### DNS/Name resolution:
+Minikube VM uses the IP address of the network interface on the host, connected to the *"default"* network.
+
+```
+[kamran@kworkhorse ~]$ minikube ssh
+
+$ cat /etc/resolv.conf 
+
+nameserver 192.168.122.1
+```
+
+Here is an example lookup from inside the minikube VM's host OS:
+```
+$ nslookup wbitt.com
+Server:		192.168.122.1
+Address:	192.168.122.1:53
+
+Non-authoritative answer:
+
+Non-authoritative answer:
+Name:	wbitt.com
+Address: 18.184.217.120
+```
+
+### ssh connectivity:
+During the bootstrap process, minikube creates a RSA key-pair in `.minikube/machines/minikube/` on your host computer, and places the public key of that key-pair inside the VM, under user docker's home directory. You can use this key-pair to log on to the VM as user `docker`. Actually the `minikube ssh` command also logs you in this VM using the user `docker`.
+
+**Note:** I noticed that minikube does not do a fingerprint scan of the minikube VM's (main) IP address, and just logs on the the VM if you execute `minikube ssh` command. It uses `-o "StrictHostKeyChecking no"` switch internally for the `minikube ssh` command. That is why, no `known_hosts` file is ever updated with a fingerprint when `minikube ssh` is executed.
+
+```
+[kamran@kworkhorse ~]$ minikube ssh
+                         _             _            
+            _         _ ( )           ( )           
+  ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __  
+/' _ ` _ `\| |/' _ `\| || , <  ( ) ( )| '_`\  /'__`\
+| ( ) ( ) || || ( ) || || |\`\ | (_) || |_) )(  ___/
+(_) (_) (_)(_)(_) (_)(_)(_) (_)`\___/'(_,__/'`\____)
+
+$ exit
+logout
+[kamran@kworkhorse ~]$ 
+```
+How `minikube ssh` is executed, is logged under `/tmp/minikube.INFO` file:
+
+```
+[kamran@kworkhorse ~]$ tail /tmp/minikube.INFO
+. . . 
+
+I0428 06:25:08.816623    7686 main.go:110] libmachine: /usr/bin/ssh -F /dev/null -o ConnectionAttempts=3 -o ConnectTimeout=10 -o ControlMaster=no -o ControlPath=none -o LogLevel=quiet -o PasswordAuthentication=no -o ServerAliveInterval=60 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null docker@192.168.39.174 -o IdentitiesOnly=yes -i /home/kamran/.minikube/machines/minikube/id_rsa -p 22
+```
+You can see that the command is indeed executed with `-o StrictHostKeyChecking=no` along other switches.
+
+
+Now I try to connect to the minikube VM over both networks, using standard `ssh` command:
 
 ```
 [kamran@kworkhorse ~]$ ssh -i .minikube/machines/minikube/id_rsa docker@192.168.39.174
+The authenticity of host '192.168.39.174 (192.168.39.174)' can't be established.
+ECDSA key fingerprint is SHA256:qARHWuKImsg4qtAhOtZN6PXI2dBuNB9x+Z3kj8kPYeY.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '192.168.39.174' (ECDSA) to the list of known hosts.
+
                          _             _            
             _         _ ( )           ( )           
   ___ ___  (_)  ___  (_)| |/')  _   _ | |_      __  
@@ -399,7 +473,7 @@ You can now access your service as you would normally do through a LoadBalancer 
 [kamran@kworkhorse ~]$
 ```
 
-You will notice that the **"ClusterIP"** and the **"EXTERNAL-IP"** have the same IP address, as shown in the `kubectl get svc` command's output above. On a normal kubernetes cluster, these will be different, but on this cluster, they are same. There is a reason for that. Minikube uses these **"EXTERNAL-IPs"** as mere **"labels"**. On the host, it sets a route for this network range to be sent to the minikube VM's IP address. As soon as the traffic reaches the minikube VM, the `iptables` rules setup by the minikube's LoadBalancer controller takes the traffic and sends (DNAT) those packets to the actual pods. 
+You will notice that the **"ClusterIP"** and the **"EXTERNAL-IP"** have the same IP address, as shown in the `kubectl get svc` command's output above. On a normal kubernetes cluster, these will be different, but on this (minikube) cluster, they are same. There is a reason for that. As part of the tricks it performs, minikube uses these **"EXTERNAL-IPs"** as mere **"labels"**. On the host, it sets a network route for this network range to be sent to the minikube VM's IP address. Then, on the VM itself, it sets up some IPTables rules. As soon as the traffic reaches the minikube VM, the `iptables` rules setup by the minikube's LoadBalancer controller takes the traffic and sends (DNAT) those packets to the actual pods. 
 
 Here are the iptables rules from the minikube VM, after a service (`nginx`) has been setup as `type:LoadBalancer` :
 
@@ -548,4 +622,36 @@ Some of the information about how the minikube VM is setup, and how the kubernet
 }
 [kamran@kworkhorse ~]$ 
 ```
+
+## MiniKube log files:
+On the host (i.e. your work computer), minikube logs in `/tmp/minikube.INFO` and `/tmp/minikube.WARNING` files. These files are rotated each time minikube is stopped and started. So the above are basically symlinks to the latest files.
+
+```
+[kamran@kworkhorse ~]$ cd /tmp
+
+[kamran@kworkhorse tmp]$ ls -l minikube.*
+lrwxrwxrwx 1 kamran kamran    56 Apr 28 06:37 minikube.INFO -> minikube.kworkhorse.kamran.log.INFO.20200428-063739.8020
+-rw-rw-r-- 1 kamran kamran  1621 Apr 28 05:55 minikube.kworkhorse.kamran.log.INFO.20200428-055558.5758
+-rw-rw-r-- 1 kamran kamran 80005 Apr 28 05:56 minikube.kworkhorse.kamran.log.INFO.20200428-055603.5914
+-rw-rw-r-- 1 kamran kamran  5159 Apr 28 05:57 minikube.kworkhorse.kamran.log.INFO.20200428-055722.6368
+-rw-rw-r-- 1 kamran kamran   629 Apr 28 06:12 minikube.kworkhorse.kamran.log.INFO.20200428-061233.6851
+-rw-rw-r-- 1 kamran kamran   187 Apr 28 06:12 minikube.kworkhorse.kamran.log.INFO.20200428-061258.6905
+-rw-rw-r-- 1 kamran kamran   187 Apr 28 06:13 minikube.kworkhorse.kamran.log.INFO.20200428-061303.6926
+-rw-rw-r-- 1 kamran kamran  2871 Apr 28 06:13 minikube.kworkhorse.kamran.log.INFO.20200428-061341.6965
+-rw-rw-r-- 1 kamran kamran  5159 Apr 28 06:22 minikube.kworkhorse.kamran.log.INFO.20200428-062207.7371
+-rw-rw-r-- 1 kamran kamran  5159 Apr 28 06:24 minikube.kworkhorse.kamran.log.INFO.20200428-062447.7606
+-rw-rw-r-- 1 kamran kamran  5159 Apr 28 06:25 minikube.kworkhorse.kamran.log.INFO.20200428-062508.7686
+-rw-rw-r-- 1 kamran kamran  5159 Apr 28 06:38 minikube.kworkhorse.kamran.log.INFO.20200428-063739.8020
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 05:55 minikube.kworkhorse.kamran.log.WARNING.20200428-055558.5758
+-rw-rw-r-- 1 kamran kamran  2554 Apr 28 05:56 minikube.kworkhorse.kamran.log.WARNING.20200428-055603.5914
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 05:57 minikube.kworkhorse.kamran.log.WARNING.20200428-055722.6368
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 06:13 minikube.kworkhorse.kamran.log.WARNING.20200428-061341.6965
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 06:22 minikube.kworkhorse.kamran.log.WARNING.20200428-062207.7371
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 06:24 minikube.kworkhorse.kamran.log.WARNING.20200428-062447.7606
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 06:25 minikube.kworkhorse.kamran.log.WARNING.20200428-062508.7686
+-rw-rw-r-- 1 kamran kamran   376 Apr 28 06:38 minikube.kworkhorse.kamran.log.WARNING.20200428-063739.8020
+lrwxrwxrwx 1 kamran kamran    59 Apr 28 06:37 minikube.WARNING -> minikube.kworkhorse.kamran.log.WARNING.20200428-063739.8020
+[kamran@kworkhorse tmp]$ 
+```
+
 
