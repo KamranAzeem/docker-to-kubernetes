@@ -1,4 +1,4 @@
-# Minikube Internals - Advanced topic
+# Minikube Internals - Fedora Linux - Advanced topic
 
 Minikube is a simple single-node kubernetes cluster, which installs easily on your work computer - as a small virtual machine. It is open-source, and is free of cost. It is especially useful, when you want to learn / work with Kubernetes, but can't afford to run even a small Kubernetes cluster in a cloud environment, such as GCP, etc. 
 
@@ -6,7 +6,7 @@ The emphasis is on having minikube *running as a VM*, (not as a process on docke
 
 First, if you installed minikube **on Linux** *and* **used KVM for Virtualization**, then congratulations, you made the best choice! :) The reason is, Linux and KVM setup is very simple and straight-forward. There is nothing hidden, complicated, fearful or frustrating - as it is the case with Windows and VirtualBox/HyperV. 
 
-This article discusses a minikube VM, running in KVM, on Fedora Linux.
+This article discusses advanced concepts about minikube VM, running in KVM, on Fedora Linux.
 
 ## KVM virtual networks:
 By default, KVM (libvirt) sets up a virtual network on your Linux host, and calls it `virbr0` (or, Virtual Bridge - Zero). This is a **NAT** type network,(Network Address Translation), which NATs any traffic coming in from inside this virtual network, trying to reach the internet, via any of the physical devices on your host. i.e either your wireless adapter, or network/ethernet port, or modem. So, this way, not only you can access the VMs you create (on this network), the VMs (on this network) can easily reach the internet also. 
@@ -496,7 +496,9 @@ You can now access your service as you would normally do through a LoadBalancer 
 
 You will notice that the **"ClusterIP"** and the **"EXTERNAL-IP"** have the same IP address, as shown in the `kubectl get svc` command's output above. On a normal kubernetes cluster, these will be different, but on this (minikube) cluster, they are same. There is a reason for that. As part of the tricks it performs, minikube uses these **"EXTERNAL-IPs"** as mere **"labels"**. On the host, it sets a network route for this network range to be sent to the minikube VM's IP address. Then, on the VM itself, it sets up some IPTables rules. As soon as the traffic reaches the minikube VM, the `iptables` rules setup by the minikube's LoadBalancer controller takes the traffic and sends (DNAT) those packets to the actual pods. 
 
-Here are the iptables rules from the minikube VM, after a service (`nginx`) has been setup as `type:LoadBalancer` :
+Here are the `iptables` rules created on the minikube VM for the `nginx` service created in the `default` namespace. These rules are added in various iptables chains. 
+
+Note: The default output of `iptables-save` is very detailed and cryptic. The output shown below has been simplified for you.
 
 ```
 [kamran@kworkhorse ~]$ minikube ssh
@@ -509,25 +511,48 @@ Here are the iptables rules from the minikube VM, after a service (`nginx`) has 
 
 $ sudo -i
 
-# iptables -L -t nat | grep nginx
-KUBE-MARK-MASQ  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
-KUBE-SVC-4N57TFCL4MD7ZTDA  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
-KUBE-MARK-DROP  all  --  anywhere             anywhere             /* default/nginx: loadbalancer IP */
-KUBE-MARK-MASQ  tcp  --  anywhere             anywhere             /* default/nginx: */ tcp dpt:32185
-KUBE-SVC-4N57TFCL4MD7ZTDA  tcp  --  anywhere             anywhere             /* default/nginx: */ tcp dpt:32185
-KUBE-MARK-MASQ  all  --  172.17.0.8           anywhere             /* default/nginx: */
-DNAT       tcp  --  anywhere             anywhere             /* default/nginx: */ tcp to:172.17.0.8:80
-KUBE-SVC-4N57TFCL4MD7ZTDA  tcp  --  anywhere             10.106.130.70        /* default/nginx: cluster IP */ tcp dpt:www
-KUBE-FW-4N57TFCL4MD7ZTDA  tcp  --  anywhere             10.106.130.70        /* default/nginx: loadbalancer IP */ tcp dpt:www
-KUBE-SEP-Z5JB7O4CUBWMYZUU  all  --  anywhere             anywhere             /* default/nginx: */
-# 
+# iptables-save
+
+*nat
+
+:PREROUTING ACCEPT [33:2445]
+-A PREROUTING -m comment --comment "kubernetes service portals" -j KUBE-SERVICES
+
+:KUBE-NODEPORTS - [0:0]
+-A KUBE-NODEPORTS -p tcp -m comment --comment "default/nginx:" -m tcp --dport 32185 -j KUBE-MARK-MASQ
+-A KUBE-NODEPORTS -p tcp -m comment --comment "default/nginx:" -m tcp --dport 32185 -j KUBE-SVC-4TDA
+
+
+:KUBE-SERVICES - [0:0]
+-A KUBE-SERVICES -d 10.106.130.70/32 -p tcp -m comment --comment "default/nginx: cluster IP" -m tcp --dport 80 -j KUBE-SVC-4TDA
+-A KUBE-SERVICES -d 10.106.130.70/32 -p tcp -m comment --comment "default/nginx: loadbalancer IP" -m tcp --dport 80 -j KUBE-FW-4TDA
+
+
+:KUBE-FW-4TDA - [0:0]
+-A KUBE-FW-4TDA -m comment --comment "default/nginx: loadbalancer IP" -j KUBE-SVC-4TDA
+
+:KUBE-SVC-4TDA - [0:0]
+-A KUBE-SVC-4TDA -m comment --comment "default/nginx:" -j KUBE-SEP-ZZUU
+
+:KUBE-SEP-ZZUU - [0:0]
+-A KUBE-SEP-ZZUU -p tcp -m comment --comment "default/nginx:" -m tcp -j DNAT --to-destination 172.17.0.8:80
+
+
+*mangle
+. . . 
+
+
+*filter
+. . . 
+
 ```
 
 That's a lot of tricks!
 
+-------
  
 ## Whats running inside minikube? and how?
-Minikube is a very cut down version of Linux, which uses `systemd` as it's `init` system. It uses `docker` to bring up all the Kubernetes components as containers. The process is relatively simple. The Kernel boots up, it starts `systemd`. Systemd starts up necessary services, such as network interfaces, and most importantly `docker` and `kubelet` services. Kubelet reads definition and configuration of various Kubernetes components from the `/etc/kubernetes/manifests/` and `/var/lib/kubelet` directories, and brings them up as pods/containers.
+Minikube is a very cut down version of Linux, i.e. **boot2docker** + some kubernetes automation/setup tools, including **kubeadm**. It uses `systemd` as it's `init` system. It uses a combination of `docker`+`kubelet` to bring up all the Kubernetes components as containers. The process is relatively simple. The Kernel boots up, it starts `systemd`. Systemd starts up necessary services, such as network interfaces, and most importantly `docker` and `kubelet` services. Kubelet reads definition and configuration of various Kubernetes components from the `/etc/kubernetes/manifests/` and `/var/lib/kubelet` directories, and brings them up as pods/containers.
 
 
 ```
