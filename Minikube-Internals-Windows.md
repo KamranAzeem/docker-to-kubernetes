@@ -326,15 +326,149 @@ Note: The default output of `iptables-save` is very detailed and cryptic. The ou
 
 --------- 
 
-# How Hyper-V on Windows causes bad networking:
+# How Hyper-V on Windows implements "bad networking":
 
-One of the major problem with HyperV's default vSwitch is that we cannot configure it. It can dream/decide/generate any IP network scheme for the vSwitch at any given time, and the VMs have no choice but to use it. This is sometimes a problem, especially when the vSwitch network has some sort of conflict with some other network on another network interface of the VM connected to it.
+One of the major problem with HyperV's default vSwitch is that we cannot configure it, nor can we see how it is configured. It can dream/decide/generate any IP network scheme for the vSwitch at any given time, and the VMs have no choice but to use it. This is can cause a problem, especially when the vSwitch network has some sort of conflict with some other network on another network interface of the VM connected to it.
 
-This *sometimes* is actually a routine problem when you are using minikube on Windows 10, using HyperV as hypervisor.
+This *sometimes* is actually a *routine* when you are using minikube on Windows 10, using HyperV as hypervisor.
   
 
 | ![images/hyperv-bad-networking.png](images/hyperv-bad-networking.png) |
 | --------------------------------------------------------------------- |
 
 
-The biggest problem is that the problem is not obvious. This sort of networking causes weird and unpredictable problems at unpredictable times. They are very hard to troubleshoot, especially if networking is not your domain.
+Here is the simplified version of the problem:
+
+| ![images/bad-networking-simplified.png](images/bad-networking-simplified.png) |
+| ----------------------------------------------------------------------------- |
+
+
+The biggest problem is, *"that the problem is not obvious"*. This sort of networking causes weird and unpredictable problems at unpredictable times. They are very hard to troubleshoot, especially if networking is not your domain.
+
+Imagine a situation, when someone is running a local docker service on the Windows host for day-to-day local docker usage - which is normally the case with most developers. You are aware that the docker service creates a `docker0` software bridge and assigns a network `172.17.0.0/16` to this bridge. In that case there will be multiple `172.17.x.y` networks connected to different network interfaces on these two computers, creating all sort of networking havoc.
+
+## Actual incident:
+
+Here is what I experienced recently while working with Minikube on Windows+HyperV . For some reason I had to restart the minikube VM, and I noticed that it got a new IP address assigned to it.
+
+```
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube stop
+* Stopping "minikube" in hyperv ...
+* Powering off "minikube" via SSH ...
+* Node "m01" stopped.
+
+demouser@windows-10-pro-demo MINGW64 ~
+$ minikube start
+* minikube v1.9.2 on Microsoft Windows 10 Pro 10.0.18363 Build 18363
+* Using the hyperv driver based on existing profile
+* Starting control plane node m01 in cluster minikube
+* Restarting existing hyperv VM for "minikube" ...
+* Preparing Kubernetes v1.18.0 on Docker 19.03.8 ...
+E0429 05:45:44.621218    3352 kubeadm.go:331] Overriding stale ClientConfig host https://192.168.241.250:8443 with https://172.17.6.206:8443
+* Enabling addons: default-storageclass, ingress, metrics-server, storage-provisioner
+* Done! kubectl is now configured to use "minikube"
+```
+Notice: `Overriding stale ClientConfig host https://192.168.241.250:8443 with https://172.17.6.206:8443`
+
+So, the new IP for my minikube VM is `172.17.6.206`.
+
+### Details from Windows host:
+
+Network interfaces on the host:
+```
+demouser@windows-10-pro-demo MINGW64 ~
+$ ipconfig
+
+Windows IP Configuration
+
+Wireless LAN adapter WiFi:
+
+   Connection-specific DNS Suffix  . : getinternet.no
+   Link-local IPv6 Address . . . . . : fe80::b185:5cf9:f6d7:8042%19
+   IPv4 Address. . . . . . . . . . . : 192.168.0.31
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 192.168.0.1
+
+Ethernet adapter vEthernet (Default Switch):
+
+   Connection-specific DNS Suffix  . :
+   Link-local IPv6 Address . . . . . : fe80::7d40:afdd:693c:702%21
+   IPv4 Address. . . . . . . . . . . : 172.17.6.193
+   Subnet Mask . . . . . . . . . . . : 255.255.255.240
+   Default Gateway . . . . . . . . . :
+``` 
+
+Routing table of the host:
+```
+demouser@windows-10-pro-demo MINGW64 ~
+$ route print
+IPv4 Route Table
+===========================================================================
+Active Routes:
+Network Destination        Netmask          Gateway       Interface  Metric
+          0.0.0.0          0.0.0.0      192.168.0.1     192.168.0.31     45
+        127.0.0.0        255.0.0.0         On-link         127.0.0.1    331
+        127.0.0.1  255.255.255.255         On-link         127.0.0.1    331
+  127.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+     172.17.6.192  255.255.255.240         On-link      172.17.6.193   5256
+     172.17.6.193  255.255.255.255         On-link      172.17.6.193   5256
+     172.17.6.207  255.255.255.255         On-link      172.17.6.193   5256
+      192.168.0.0    255.255.255.0         On-link      192.168.0.31    301
+     192.168.0.31  255.255.255.255         On-link      192.168.0.31    301
+    192.168.0.255  255.255.255.255         On-link      192.168.0.31    301
+        224.0.0.0        240.0.0.0         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link      192.168.0.31    301
+        224.0.0.0        240.0.0.0         On-link      172.17.6.193   5256
+  255.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+  255.255.255.255  255.255.255.255         On-link      192.168.0.31    301
+  255.255.255.255  255.255.255.255         On-link      172.17.6.193   5256
+===========================================================================
+```
+
+
+Based on the IP address and the subnet mask, I calculated the IP addresses from this subnet are:
+* Network (or subnet) address: `172.17.6.192`
+* First usable IP address: `172.17.6.193`  -- being used by Windows Host on it's virtual interface.
+* Last usable IP address: `172.16.6.206`
+* Broadcast address: `172.16.6.207` 
+
+
+
+### Details from the minikube VM:
+
+Network interfaces:
+```
+# ifconfig
+docker0   Link encap:Ethernet  HWaddr 02:42:15:11:F8:80
+          inet addr:172.17.0.1  Bcast:172.17.255.255  Mask:255.255.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:197833 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:191897 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:17497699 (16.6 MiB)  TX bytes:85174982 (81.2 MiB)
+
+eth0      Link encap:Ethernet  HWaddr 00:15:5D:00:1F:01
+          inet addr:172.17.6.206  Bcast:172.17.6.207  Mask:255.255.255.240
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:3948 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:3486 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:410586 (400.9 KiB)  TX bytes:533714 (521.2 KiB)
+. . . 
+(output snipped)
+. . .
+```
+
+Routing table of the VM:
+```
+# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         172.17.6.193    0.0.0.0         UG    1024   0        0 eth0
+172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
+172.17.6.192    0.0.0.0         255.255.255.240 U     0      0        0 eth0
+172.17.6.193    0.0.0.0         255.255.255.255 UH    1024   0        0 eth0
+```
+
+So far, I did not experience any *immediate* problems, but as I explained above, this sort of networking causes weird and unpredictable problems at unpredictable times. They are very hard to troubleshoot, especially if networking is not your domain. So watch out! And, somebody needs to inform minikube people.
