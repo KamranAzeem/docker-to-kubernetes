@@ -10,11 +10,12 @@ Here is how the minikube VM setup looks like:
 
 ## What do you need to get it to work?
 You need decently powered computer, with following specs:
-* CPUs with hardware virtualization (Intel VT or AMD-V). Normally Intel's i3, i5, i7 (and now i9), and AMD's FX 63xx, 83xx, 9xxx, A10, A8, etc  are a good choices. 
+* CPUs with hardware virtualization (Intel VT or AMD-V). Normally Intel's i3, i5, i7 (and now i9), and AMD's FX 63xx, 83xx, 9xxx, A10, A8, etc  are a good choices. Chromebooks (or computers with similar specs) will not work.
 * Minimum 4 GB RAM is good enough if you want to run Linux. Minikube takes 2 GB RAM from host computer, and assigns it to the minikube VM. If you are using Windows, then you need more, because windows is basically bloatware, and it just abuses system resources. 
 * At least 20 GB free disk-space on your host OS, because minikube will create a 20 GB virtual disk. You can increase the size of the virtual disk at the time of minikube setup.
-* A Hypervisor running on the computer, such as KVM. I don't recommend VirtualBox, or HyperV, or anything else. However, if you are on Windows or Mac, then you have no choice but to use one of these.
-* Chromebooks will not work.
+* A Hypervisor running on the computer, such as KVM. I don't recommend VirtualBox, or HyperV, or anything else. However, if you are on Windows or Mac, then you have no choice but to use one of these. This guide is about installing MiniKube on Fedora Linux, using KVM.
+* Your OS user must be a member of the "libvirt" (sometimes "libvirtd") OS group.   
+
 
 ## Install and Setup Minikube on your local computer:
 Lets install minikube on our system. The computer I am using is an Intel i7, 16 GB RAM, runs Fedora Linux 31, and runs KVM as Hypervisor. Just so you know, KVM is world's strongest, most efficient and most lightweight Hypervisor. It runs directly inside the Linux kernel - as a loadable kernel module. RedHat (world's largest open source company) uses KVM in the heart of it's **RedHat Enterprise Virtualization** product. AWS (the biggest cloud provider) is also moving it's infrastructure from XEN to KVM.
@@ -24,7 +25,51 @@ Lets install minikube on our system. The computer I am using is an Intel i7, 16 
 ### Prerequisites:
 Besides OS and Hypervisor, you also need some additional software.
 
-If you installed Google-Cloud-SDK on your computer, then you should know that it provides lots of packages, such as `kubectl`, *as well as* `minikube`! You can install these using gcloud commands:
+Make sure your user is a member of the group "libvirt" (or "libvirtd"). If not, add it with `gpasswd -a <username> libvirt` . You will need to logout (of the GUI session) and login again for the changes to take effect. 
+
+```
+[root@kworkhorse ~]# gpasswd -a kamran libvirt
+Adding user kamran to group libvirt
+```
+
+Verify with the `id` command:
+```
+[kamran@kworkhorse ~]$ id 
+uid=1000(kamran) gid=1000(kamran) groups=1000(kamran),10(wheel),981(libvirt),1001(docker)
+```
+
+#### Install `kubectl` and `minikube` without using google cloud sdk:
+
+Install kubectl using Kubernetes official repository:
+(Run the commands as root)
+```
+[root@kworkhorse ~]# cat > /etc/yum.repos.d/kubernetes.repo <<EOF 
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+EOF
+```
+
+```
+[root@kworkhorse ~]# yum install -y kubectl
+```
+
+Install minikube:
+(Run the commands as root)
+```
+[root@kworkhorse ~]# curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
+  && chmod +x minikube
+[root@kworkhorse ~]# mkdir -p /usr/local/bin/
+[root@kworkhorse ~]# install minikube /usr/local/bin/
+```
+
+#### Install `kubectl` and `minikube` using google cloud sdk:
+
+If you have Google-Cloud-SDK already installed on your computer, then you should know that it provides lots of packages, such as `kubectl`, *as well as* `minikube`! You can install these using gcloud commands:
 ```
 gcloud components list
 
@@ -107,7 +152,6 @@ Complete!
 [root@kworkhorse ~]#
 ``` 
 
-
 ### Setup minikube VM:
 ```
 [kamran@kworkhorse ~]$ minikube start --driver=kvm2
@@ -147,7 +191,7 @@ minikube   Ready    master   2m    v1.18.0
 ```
 
 ### Minikube Addons:
-By deafult, Minikube brings several addons with it in the deafult installation, but only few are enabled. Depending on your needs you can enable different addons.
+By default, Minikube brings several addons with it in the default installation, but only few are enabled. Depending on your needs you can enable different addons.
 
 ```
 [kamran@kworkhorse ~]$ minikube addons list
