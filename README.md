@@ -9,5 +9,6 @@ This document is divided into several parts:
 Other articles/guides:
 * [Minikube basics - Linux](Minikube-on-Fedora.md) - Use Kubernetes on local Linux machine for learning. (Uses Fedora Linux and KVM)
 * [Minikube basics - Windows](Minikube-on-Windows.md) - Use Kubernetes on local Linux machine for learning. (Uses Windows 10 Professional and Hyper-V)
-* [Minikube internals/advanced concepts](Minikube-Internals-Fedora.md) - Deep dive into "How minikube works?" - (Concepts explained using Fedora Linux and KVM)
+* [Minikube internals/advanced concepts - Fedora/KVM](Minikube-Internals-Fedora.md) - Deep dive into "How minikube works on Linux?" - (Concepts explained using Fedora Linux and KVM)
+* [Minikube internals/advanced concepts - Windows/Hyper-V](Minikube-Internals-Windows.md) - Deep dive into "How minikube works on Windows?" - (Concepts explained using Windows 10 Professional and Hyper-V)
 
