@@ -29,7 +29,7 @@ Lets go straight to HyperV vswitch. It is **"not configurable/manageable"** by t
 | ----------------------------------------------------------- |
 
 
-This switch can select any networking scheme depending on it's **"mood"** - as per my observation. Sometimes it will configure an IP network of `192.168.241.240/28` , and some other time it could be completely different such as `172.17.6.192/28`. Keep in mind that the main (wireless) LAN network the Windows host is connected to never changed, nor the (wireless) LAN IP assigned to this Windows machine changed. (It stayed at `192.168.0.31/24`). 
+This switch can select any networking scheme depending on it's *"mood"* - as per my observation. Sometimes it will configure an IP network of `192.168.241.240/28` , and some other time it could be completely different such as `172.17.6.192/28`. Keep in mind that the main (wireless) LAN network the Windows host is connected to never changed, nor the (wireless) LAN IP assigned to this Windows machine changed. (It stayed at `192.168.0.31/24`). 
 
 **Note:** The `/28` part will be explained in a moment.
 
