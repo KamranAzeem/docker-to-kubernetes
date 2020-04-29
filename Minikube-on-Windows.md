@@ -1201,7 +1201,7 @@ Remember, this (minikube) cluster is supposed to be a **local test cluster**, fo
 * If you don't want to use minikube's built-in Ingress Controller, you can use your own, such as **Traefik**. 
 
 # Other Windows level configurations/optimizations:
-## Disabled VM checkpoint:
+## Disable VM checkpoint:
 It is best to disable the VM checkpoint feature for minikube VM. It does not serve any purpose for minikube, and is an overhead. To disable it, go to: `Hyper-V -> minikube VM -> Settings -> Checkpoints`, and disable the main check-box. 
 
 | ![images/hyperv-vm-checkpoint-disabled.png](images/hyperv-vm-checkpoint-disabled.png) |
