@@ -6,7 +6,7 @@ The emphasis is on having minikube *running as a VM*, (not as a process on docke
 Here is how the minikube VM setup looks like:
 
 | ![images/minikube-network-hyperv.png](images/minikube-network-hyperv.png) |
-| ----------------------------------------------------------------------------------------- |
+| ------------------------------------------------------------------------- |
 
 ## What do you need to get it to work?
 You need decently powered computer, with following specs:
@@ -65,7 +65,6 @@ Run `git-bash` or `PowerShell` - as administrator, and run the following command
 
 ```
 demouser@windows-10-pro-demo MINGW64 ~
-
 $ minikube.exe start --driver=hyperv
 
 * minikube v1.9.2 on Microsoft Windows 10 Pro 10.0.18363 Build 18363
