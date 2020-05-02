@@ -4,7 +4,7 @@ Minikube is a simple single-node kubernetes cluster, which installs easily on yo
 
 The emphasis is on having minikube *running as a VM*, (not as a process on docker), because this takes away all the possible complexity away from your local computer. It (minikube VM) makes setting up and running the kubernetes cluster very easy. 
 
-First, if you installed minikube **on Linux** *and* **used KVM for Virtualization**, then congratulations, you made the best choice! :) The reason is, Linux and KVM setup is very simple and straight-forward. There is nothing hidden, complicated, fearful or frustrating - as it is the case with Windows and VirtualBox/HyperV. 
+First, if you installed minikube **on Linux** *and* **used KVM for Virtualization**, then congratulations, you made the best choice! :) The reason is, Linux and KVM setup is very simple and straight-forward. There is nothing hidden, complicated, fearful or frustrating - as it is the case with Windows and VirtualBox/Hyper-V. 
 
 This article discusses advanced concepts about minikube VM, running in KVM, on Fedora Linux.
 
@@ -21,11 +21,40 @@ Basically, I found no documentation on this topic so far. Minikube's documentati
 
 Below is my understanding so far. 
 
-This is some silliness from `docker-machine`, which has crept into the KVM setup from the VirtualBox setup. Just so you know, minikube uses `docker-machine` internally to setup the VM on a given hypervisor. Now, VirtualBox has very weird networking; and when docker-machine is used to setup a docker environment on VirtualBox, it uses two networks, one to access the VM, and the other for the VM to access the Internet. When `minikube` needed this (docker) setup for KVM, someone from docker-machine team - not confirmed yet, but most probably - copied the same design and applied to KVM/libvirt, which was completely unnecessary, and just complicated things. KVM is very capable, simple and efficient hypervisor, and it does not need any *"workarounds"* . Treating KVM and VirtualBox in the same way is unfair with KVM. 
+This is some silliness from `docker-machine`, which has crept into the KVM setup from the VirtualBox setup. Just so you know, minikube uses `docker-machine` internally to setup the VM on a given Hypervisor. (... and, docker-machine uses boot2docker.iso internally!). Now, VirtualBox has very weird networking; and when docker-machine is used to setup a docker environment on VirtualBox, it uses two networks, one (HostOnly network) to access the VM, and the other (NAT network) for the VM to access the Internet. When `minikube` needed this (docker) setup for KVM, someone from docker-machine team - (most probably, but not confirmed) - copied the same design and applied to KVM/libvirt, which was completely unnecessary, and just complicated things. KVM is very capable, simple and efficient Hypervisor, and it does not need any *"workarounds"* . Treating KVM and VirtualBox in the same way is unfair with KVM. 
 
-I later checked minikube on Windows-10/Hyper-V, and found out that minikube's setup *does not* create the additional *isolated network* on Hyper-V the way it did on Linux. Instead it simply uses Hyper-V's *default* network for accessing the minikube VM from the host, and for the minikube VM to access the Internet. Simple! 
+I later checked minikube on Windows-10/Hyper-V, and found out that minikube's setup *does not* create the additional *host only* / *isolated network* on Hyper-V, the way it did on Linux. Instead it simply uses Hyper-V's *default* network for accessing the minikube VM from the host, and for the minikube VM to access the Internet. Simple! 
 
-I don't know why minikube and/or docker-machine team decided to go the *"two networks"* route for KVM.
+I found two links on the internet, where there was direct reference to **"two networks"**, first one is [https://github.com/dhiltgen/docker-machine-kvm](https://github.com/dhiltgen/docker-machine-kvm). 
+
+It says:
+
+> eth1 - A host private network called docker-machines is automatically created to ensure we always have connectivity to the VMs. The docker-machine ip command will always return this IP address which is only accessible from your local system.
+
+> eth0 - You can specify any libvirt named network. If you don't specify one, the "default" named network will be used.
+
+
+The other one was on this URL: [https://github.com/boot2docker/boot2docker-cli](https://github.com/boot2docker/boot2docker-cli) 
+
+It says:
+
+> This tool downloads the boot2docker ISO image, creates a VirtualBox virtual machine, sets up two networks for that virtual machine (one NAT to allow the VM and containers to access the internet, the other host-only to allow container port mapping to work securely), and then provides the user a simple way to login via SSH.
+
+It also says that: *"This project is officially deprecated in favor of Docker Machine."* . 
+
+When I checked Docker-Machine's documentation, I found that it uses **boot2docker.iso** . If you check the links I provided below, you will find clear evidence of `boot2docker` being used by `docker-machine` to provision virtual machines on VirtualBox or Hyper-V. Moreover, you will notice that the document describing VirtualBox setup shows command line switches for *"host-only"* and *"NAT"* networks; and, the document describing Hyper-V setup shows command line switches to use only one *"external"* network. 
+
+On Docker's website, I found all the the links talking about VirtualBox and Hyper-V only. Unfortunately, I did not find any official *Docker* documentation of `docker-machine` setup on **KVM**. Very disappointing. It does not even list **KVM** on the [list of drivers](https://docs.docker.com/machine/drivers/) - at all! Very strange! 
+
+
+Reference links:
+* [https://github.com/boot2docker/boot2docker-cli](https://github.com/boot2docker/boot2docker-cli)
+* [https://docs.docker.com/machine/get-started/](https://docs.docker.com/machine/get-started/)
+* [https://docs.docker.com/machine/drivers/virtualbox/](https://docs.docker.com/machine/drivers/virtualbox/)
+* [https://docs.docker.com/machine/drivers/hyper-v/](https://docs.docker.com/machine/drivers/hyper-v/)
+* [https://docs.docker.com/machine/drivers/](https://docs.docker.com/machine/drivers/)
+* [https://github.com/dhiltgen/docker-machine-kvm](https://github.com/dhiltgen/docker-machine-kvm)
+* [https://access.redhat.com/documentation/en-us/red_hat_container_development_kit/3.0/html/installation_guide/docker-machine-driver-install](https://access.redhat.com/documentation/en-us/red_hat_container_development_kit/3.0/html/installation_guide/docker-machine-driver-install) 
 
 ## More networking details about the MiniKube VM:
 The minikube bootstrap process talks to the Hypervisor - KVM in our case - and dictates how the VM will be setup, such as:
@@ -34,7 +63,7 @@ The minikube bootstrap process talks to the Hypervisor - KVM in our case - and d
 * size of disk
 * network cards, and the network to which each network card connects
 
-When you pass the `--driver=kvm2` on the `minikube start` command, minikube configures itself to talk to KVM to get things done. That handles the *"talking to the Hypervisor"* part. When the VM is being created, the DHCP services serving/attached to each virtual network, assign an IP address to the corresponding network interface on the VM. This IP address can be queried/obtained directly from the hypervisor. e.g.
+When you pass the `--driver=kvm2` on the `minikube start` command, minikube configures itself to talk to KVM to get things done. That handles the *"talking to the Hypervisor"* part. When the VM is being created, the DHCP services serving/attached to each virtual network, assign an IP address to the corresponding network interface on the VM. This IP address can be queried/obtained directly from the Hypervisor. e.g.
 
 ```
 [root@kworkhorse ~]# virsh net-list
@@ -89,7 +118,7 @@ During the bootstrap process minikube uses this (main) IP address to configure v
 All of above happens when you use `minikube start --driver=kvm2` command. Minikube performs all these checks every time you `start` the VM from the *stopped* state. If, for some reason, the IP changes, minikube bootstrap process updates all necessary files. 
 
 ### Minikube IP:
-`minikube ip` command **never** returns you the IP of the VM when the minikube VM is in stopped state. It does not just read the IP from config file and shows it to you. It actually queries the hypervisor each time `minikube ip` command is issued and depending on the VM's state, either shows the IP currently assigned to the VM by KVM's DHCP service (serving/connected to the isolated network), or refuses to show it to you if the VM is found in the stopped state. Below are examples of both cases:
+`minikube ip` command **never** returns you the IP of the VM when the minikube VM is in stopped state. It does not just read the IP from config file and shows it to you. It actually queries the Hypervisor each time `minikube ip` command is issued and depending on the VM's state, either shows the IP currently assigned to the VM by KVM's DHCP service (serving/connected to the isolated network), or refuses to show it to you if the VM is found in the stopped state. Below are examples of both cases:
 
 ```
 [kamran@kworkhorse ~]$ minikube ip

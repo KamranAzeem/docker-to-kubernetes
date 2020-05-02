@@ -11,21 +11,21 @@ This article discusses advanced concepts about minikube VM, running in Hyper-V, 
 
 Here is the diagram for a quick recap.
 
-| ![images/minikube-network-hyperv.png](images/minikube-network-hyperv.png) |
+| ![images/minikube-network-Hyper-V.png](images/minikube-network-Hyper-V.png) |
 | ------------------------------------------------------------------------- |
 
 
 ### Windows Host network configuration:
-Lets go straight to HyperV vswitch. It is **"not configurable/manageable"** by the user. You are at Microsoft's mercy here. 
+Lets go straight to Hyper-V vswitch. It is **"not configurable/manageable"** by the user. You are at Microsoft's mercy here. 
 
 
-| ![images/hyperv-vswitch-1.png](images/hyperv-vswitch-1.png) |
+| ![images/Hyper-V-vswitch-1.png](images/Hyper-V-vswitch-1.png) |
 | ----------------------------------------------------------- |
 
-| ![images/hyperv-vswitch-2.png](images/hyperv-vswitch-2.png) |
+| ![images/Hyper-V-vswitch-2.png](images/Hyper-V-vswitch-2.png) |
 | ----------------------------------------------------------- |
 
-| ![images/hyperv-vswitch-3.png](images/hyperv-vswitch-3.png) |
+| ![images/Hyper-V-vswitch-3.png](images/Hyper-V-vswitch-3.png) |
 | ----------------------------------------------------------- |
 
 
@@ -175,7 +175,7 @@ The IP addresses from this subnet are:
 
 The IP address assigned to the minikube VM is `192.168.241.250`, which of-course is from within the usable IP range.
 
-I don't know why Microsoft decided to assign a very limited network to the virtual switch. Remember, this vSwitch is *not* created by minikube. It is created when you install HyperV for the first time.
+I don't know why Microsoft decided to assign a very limited network to the virtual switch. Remember, this vSwitch is *not* created by minikube. It is created when you install Hyper-V for the first time.
 
 Here is the routing table from the minikube VM:
 ```
@@ -328,12 +328,12 @@ Note: The default output of `iptables-save` is very detailed and cryptic. The ou
 
 # How Hyper-V on Windows implements "bad networking":
 
-One of the major problem with HyperV's default vSwitch is that we cannot configure it, nor can we see how it is configured. It can dream/decide/generate any IP network scheme for the vSwitch at any given time, and the VMs have no choice but to use it. This is can cause a problem, especially when the vSwitch network has some sort of conflict with some other network on another network interface of the VM connected to it.
+One of the major problem with Hyper-V's default vSwitch is that we cannot configure it, nor can we see how it is configured. It can dream/decide/generate any IP network scheme for the vSwitch at any given time, and the VMs have no choice but to use it. This is can cause a problem, especially when the vSwitch network has some sort of conflict with some other network on another network interface of the VM connected to it.
 
-This *sometimes* is actually a *routine* when you are using minikube on Windows 10, using HyperV as hypervisor.
+This *sometimes* is actually a *routine* when you are using minikube on Windows 10, using Hyper-V as Hypervisor.
   
 
-| ![images/hyperv-bad-networking.png](images/hyperv-bad-networking.png) |
+| ![images/Hyper-V-bad-networking.png](images/Hyper-V-bad-networking.png) |
 | --------------------------------------------------------------------- |
 
 
@@ -349,21 +349,21 @@ Imagine a situation, when someone is running a local docker service on the Windo
 
 ## Actual incident:
 
-Here is what I experienced recently while working with Minikube on Windows+HyperV . For some reason I had to restart the minikube VM, and I noticed that it got a new IP address assigned to it.
+Here is what I experienced recently while working with Minikube on Windows+Hyper-V . For some reason I had to restart the minikube VM, and I noticed that it got a new IP address assigned to it.
 
 ```
 demouser@windows-10-pro-demo MINGW64 ~
 $ minikube stop
-* Stopping "minikube" in hyperv ...
+* Stopping "minikube" in Hyper-V ...
 * Powering off "minikube" via SSH ...
 * Node "m01" stopped.
 
 demouser@windows-10-pro-demo MINGW64 ~
 $ minikube start
 * minikube v1.9.2 on Microsoft Windows 10 Pro 10.0.18363 Build 18363
-* Using the hyperv driver based on existing profile
+* Using the Hyper-V driver based on existing profile
 * Starting control plane node m01 in cluster minikube
-* Restarting existing hyperv VM for "minikube" ...
+* Restarting existing Hyper-V VM for "minikube" ...
 * Preparing Kubernetes v1.18.0 on Docker 19.03.8 ...
 E0429 05:45:44.621218    3352 kubeadm.go:331] Overriding stale ClientConfig host https://192.168.241.250:8443 with https://172.17.6.206:8443
 * Enabling addons: default-storageclass, ingress, metrics-server, storage-provisioner
@@ -430,8 +430,8 @@ Network Destination        Netmask          Gateway       Interface  Metric
 Based on the IP address and the subnet mask, I calculated the IP addresses from this subnet are:
 * Network (or subnet) address: `172.17.6.192`
 * First usable IP address: `172.17.6.193`  -- being used by Windows Host on it's virtual interface.
-* Last usable IP address: `172.16.6.206`
-* Broadcast address: `172.16.6.207` 
+* Last usable IP address: `172.17.6.206`
+* Broadcast address: `172.17.6.207` 
 
 
 
