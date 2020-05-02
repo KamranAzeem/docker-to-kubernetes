@@ -326,7 +326,7 @@ Note: The default output of `iptables-save` is very detailed and cryptic. The ou
 
 --------- 
 
-# How Hyper-V on Windows implements "bad networking":
+# Hyper-V and "bad networking":
 
 One of the major problem with Hyper-V's default vSwitch is that we cannot configure it, nor can we see how it is configured. It can dream/decide/generate any IP network scheme for the vSwitch at any given time, and the VMs have no choice but to use it. This is can cause a problem, especially when the vSwitch network has some sort of conflict with some other network on another network interface of the VM connected to it.
 
@@ -471,4 +471,4 @@ Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 172.17.6.193    0.0.0.0         255.255.255.255 UH    1024   0        0 eth0
 ```
 
-So far, I did not experience any *immediate* problems, but as I explained above, this sort of networking causes weird and unpredictable problems at unpredictable times. They are very hard to troubleshoot, especially if networking is not your domain. So watch out! And, somebody needs to inform minikube people.
+So far, I did not experience any *immediate* problems, but as I explained above, this sort of networking causes weird and unpredictable problems at unpredictable times. They are very hard to troubleshoot, especially if networking is not your domain. So watch out!
