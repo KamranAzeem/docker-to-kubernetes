@@ -333,7 +333,7 @@ One of the major problem with Hyper-V's default vSwitch is that we cannot config
 This *sometimes* is actually a *routine* when you are using minikube on Windows 10, using Hyper-V as Hypervisor.
   
 
-| ![images/Hyper-V-bad-networking.png](images/Hyper-V-bad-networking.png) |
+| ![images/hyperv-bad-networking.png](images/hyperv-bad-networking.png) |
 | --------------------------------------------------------------------- |
 
 
